@@ -236,7 +236,7 @@ function AddUserSheet({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="responsive-form-grid grid grid-cols-2 gap-2">
         <div>
           <label className="text-[12px] font-semibold text-slate-600">PIN</label>
           <input

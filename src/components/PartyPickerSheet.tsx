@@ -89,7 +89,7 @@ export function PartyPickerSheet({
             <label className="label">Naam *</label>
             <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Sharma Ji / Gupta Builders" autoFocus />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="responsive-form-grid grid grid-cols-2 gap-3">
             <div className="field">
               <label className="label">Mobile</label>
               <input className="input" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="98765 43210" />
@@ -103,7 +103,7 @@ export function PartyPickerSheet({
             <label className="label">Address</label>
             <textarea className="textarea" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="responsive-form-grid grid grid-cols-2 gap-3">
             <div className="field">
               <label className="label">State (GST)</label>
               <select className="select" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })}>

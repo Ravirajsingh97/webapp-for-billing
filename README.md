@@ -85,6 +85,16 @@ npm run dev         # http://localhost:5173
 
 दूसरे device/network से खोलने के लिए server पहले से `0.0.0.0` पर bind है।
 
+### 📐 Responsive UI
+
+UI को छोटे **320px mobile**, tablet और बड़े PC/desktop के लिए responsive रखा गया है:
+
+- mobile पर dense forms single-column हो जाते हैं, touch targets कम-से-कम 44px रहते हैं और sheets safe-area के साथ खुलती हैं;
+- tablet पर cards और item catalogue दो/तीन columns में फैलते हैं;
+- desktop पर POS catalogue + cart side-by-side रहता है, item grid में ज़्यादा columns आते हैं और invoice preview
+  container की width के हिसाब से scale होता है;
+- GST/HSN और aging जैसी wide tables mobile पर horizontal scroll होती हैं, page को बाहर नहीं धकेलतीं।
+
 Production build:
 
 ```bash

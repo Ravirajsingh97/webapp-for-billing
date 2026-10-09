@@ -49,7 +49,7 @@ export function Onboarding({ business, onDone }: { business: Business; onDone: (
                 <label className="label">Address</label>
                 <textarea className="textarea" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="responsive-form-grid grid grid-cols-2 gap-3">
                 <div className="field">
                   <label className="label">Mobile</label>
                   <input className="input" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
@@ -59,7 +59,7 @@ export function Onboarding({ business, onDone }: { business: Business; onDone: (
                   <input className="input uppercase" value={form.gstin ?? ''} onChange={(e) => setForm({ ...form, gstin: e.target.value })} placeholder="08ABCDE1234F1Z5" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="responsive-form-grid grid grid-cols-2 gap-3">
                 <div className="field">
                   <label className="label">State</label>
                   <select className="select" value={form.stateCode} onChange={(e) => setForm({ ...form, stateCode: e.target.value })}>

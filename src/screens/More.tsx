@@ -74,7 +74,7 @@ export function MoreScreen({
 
   return (
     <div className="screen-content flex-1 px-3 pb-28 pt-3">
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="stats-grid grid grid-cols-2 gap-2 md:grid-cols-4">
         <div className="card text-[12px]">
           <div className="text-[10px] font-bold uppercase text-slate-500">Lena hai (receivable)</div>
           <div className="num text-lg font-extrabold text-due">{money(stats.receivable, 0)}</div>
@@ -104,7 +104,7 @@ export function MoreScreen({
       <div className="section-title mt-4">
         <span>Naya document banayein</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
+      <div className="document-grid grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
         {DOC_TYPES.map((d) => (
           <button
             key={d.key}

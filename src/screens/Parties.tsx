@@ -70,7 +70,7 @@ export function PartiesScreen({ business, onOpenInvoice }: { business: Business;
         ]}
       />
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="stats-grid mt-3 grid grid-cols-2 gap-2">
         {tab === 'CUSTOMER' ? (
           <>
             <div className="stat-box">
@@ -271,7 +271,7 @@ function PartyEditor({
           <label className="label">Naam *</label>
           <input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="responsive-form-grid grid grid-cols-2 gap-3">
           <div className="field">
             <label className="label">Mobile</label>
             <input className="input" inputMode="tel" value={draft.phone ?? ''} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
@@ -285,7 +285,7 @@ function PartyEditor({
           <label className="label">Address</label>
           <textarea className="textarea" value={draft.address ?? ''} onChange={(e) => setDraft({ ...draft, address: e.target.value })} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="responsive-form-grid grid grid-cols-2 gap-3">
           <div className="field">
             <label className="label">State</label>
             <select className="select" value={draft.state ?? business.stateCode} onChange={(e) => setDraft({ ...draft, state: e.target.value })}>
@@ -382,7 +382,7 @@ function LedgerSheet({
         </div>
       }
     >
-      <div className="grid grid-cols-3 gap-2">
+      <div className="stats-grid grid grid-cols-3 gap-2">
         <div className="stat-box">
           <div className="text-[10px] font-bold uppercase text-slate-500">Total business</div>
           <div className="num text-[14px] font-extrabold">{money(totalBusiness, 0)}</div>

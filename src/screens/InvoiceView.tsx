@@ -130,7 +130,7 @@ export function InvoiceView({
             </div>
             <span className={`badge ${st.cls}`}>{st.label}</span>
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+          <div className="stats-grid mt-2 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-slate-50 py-2">
               <div className="text-[10px] font-bold uppercase text-slate-500">Total</div>
               <div className="num text-sm font-extrabold">{money(t.grandTotal)}</div>
@@ -150,7 +150,7 @@ export function InvoiceView({
         </div>
 
         {/* Actions */}
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="action-grid mt-3 grid grid-cols-2 gap-2">
           <button className="btn btn-primary" disabled={busy} onClick={() => setPrintJob(mode)}>
             🖨 Print / PDF
           </button>
@@ -536,7 +536,7 @@ function PaymentSheet({
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="responsive-form-grid grid grid-cols-2 gap-3">
           <div className="field">
             <label className="label">Date</label>
             <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />

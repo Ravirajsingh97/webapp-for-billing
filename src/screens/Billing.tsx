@@ -245,7 +245,7 @@ export function BillingScreen({
               </button>
             ))}
           </ChipRow>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="responsive-form-grid mt-2 grid grid-cols-2 gap-2">
             <div className="field">
               <label className="label">Date</label>
               <input
@@ -394,7 +394,7 @@ export function BillingScreen({
               {isPurchase ? 'Udhaar (payable)' : 'Udhaar (credit)'}
             </button>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="responsive-form-grid mt-2 grid grid-cols-2 gap-2">
             <div className="field">
               <label className="label">{isPurchase ? 'Paid to supplier (₹)' : 'Received (₹)'}</label>
               <input
@@ -504,7 +504,7 @@ export function BillingScreen({
         }
       >
         <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="responsive-form-grid grid grid-cols-2 gap-3">
             <div className="field">
               <label className="label">Transport name</label>
               <input className="input" value={inv.transportName ?? ''} onChange={(e) => patch({ transportName: e.target.value })} />
@@ -752,7 +752,7 @@ function LineEditor({
             ))}
           </select>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="responsive-form-grid grid grid-cols-3 gap-3">
           <div className="field">
             <label className="label">Qty</label>
             <input
@@ -775,7 +775,7 @@ function LineEditor({
             <input className="input" value={draft.hsn ?? ''} onChange={(e) => setDraft({ ...draft, hsn: e.target.value })} />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="responsive-form-grid grid grid-cols-3 gap-3">
           <div className="field">
             <label className="label">Rate / MRP</label>
             <input
@@ -863,7 +863,7 @@ function ChargesSheet({
       ) : (
         <div className="mb-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">Koi extra charge nahi joda gaya.</div>
       )}
-      <div className="grid grid-cols-[1fr_110px_auto] gap-2">
+      <div className="charge-row grid grid-cols-[1fr_110px_auto] gap-2">
         <input className="input" placeholder="e.g. Freight" value={label} onChange={(e) => setLabel(e.target.value)} />
         <input className="input text-right" inputMode="decimal" placeholder="₹ 0" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <button

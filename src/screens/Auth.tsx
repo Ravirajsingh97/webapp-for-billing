@@ -272,7 +272,7 @@ export function CompanySheet({
         <div className="mt-1 text-[11px] text-slate-500">
           Nayi company khaali shuru hoti hai (alag items, bills, khata). Dukaan ki details baad me Settings me bhar lein.
         </div>
-        <div className="mt-2 flex gap-2">
+        <div className="company-create-row mt-2 flex gap-2">
           <input
             className="input flex-1"
             placeholder="Jaise: Sharma Sanitary — Sikar Road"
