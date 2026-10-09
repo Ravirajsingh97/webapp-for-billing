@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { GoogleSignInButton } from './GoogleSignInButton'
 import {
   CLOUD_CHANGE_EVENT,
   autoSyncEnabled,
@@ -35,50 +36,6 @@ function fmtWhen(ms: number): string {
   const sameDay = d.toDateString() === today.toDateString()
   const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   return sameDay ? `aaj ${time}` : `${d.toLocaleDateString('en-IN')} ${time}`
-}
-
-async function googleIdToken(clientId: string): Promise<string> {
-  const w = window as unknown as {
-    google?: {
-      accounts?: {
-        id?: {
-          initialize: (o: Record<string, unknown>) => void
-          prompt: (cb?: (n: { isNotDisplayed?: () => boolean; isSkippedMoment?: () => boolean }) => void) => void
-        }
-      }
-    }
-  }
-  if (!w.google?.accounts?.id) {
-    await new Promise<void>((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = 'https://accounts.google.com/gsi/client'
-      s.async = true
-      s.onload = () => resolve()
-      s.onerror = () => reject(new Error('Google login load nahi hua — internet check karein'))
-      document.head.appendChild(s)
-    })
-  }
-  const gsi = w.google?.accounts?.id
-  if (!gsi) throw new Error('Google login available nahi hai is browser me')
-  return new Promise<string>((resolve, reject) => {
-    let done = false
-    gsi.initialize({
-      client_id: clientId,
-      callback: (resp: { credential?: string }) => {
-        done = true
-        if (resp?.credential) resolve(resp.credential)
-        else reject(new Error('Google se token nahi mila'))
-      },
-    })
-    gsi.prompt((n) => {
-      setTimeout(() => {
-        if (done) return
-        if (n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) {
-          reject(new Error('Google login window band ho gayi — dobara try karein'))
-        }
-      }, 800)
-    })
-  })
 }
 
 export function CloudCard() {
@@ -305,6 +262,12 @@ service cloud.firestore {
           <b>Authentication → Settings → Authorized domains</b> me apni site ka domain add karein (jaise{' '}
           <code>kanishk2018singh-afk.github.io</code> ya <code>cdn.jsdelivr.net</code>)
         </li>
+        <li>
+          Google login ke liye <b>Google Cloud Console → APIs &amp; Services → Credentials</b> me apna
+          OAuth Web Client kholein. <b>Authorized JavaScript origins</b> me is app ka address{' '}
+          <code className="break-all">{window.location.origin}</code> add karke Save karein.
+          Scheme aur port bhi same hone chahiye; <code>origin_mismatch</code> aaye to ye setting check karein.
+        </li>
       </ol>
 
       <div className="mt-3 text-[12px] font-semibold text-slate-600">Firebase config paste karein</div>
@@ -362,21 +325,20 @@ function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
     }
   }
 
-  const google = async () => {
+  const googlePending = useRef(false)
+  const google = async (idToken: string) => {
+    if (googlePending.current || busy) return
+    googlePending.current = true
     setErr('')
-    if (!cfg?.googleClientId) {
-      setErr('Google login ke liye pehle Cloud setup me Google Client ID daalein')
-      return
-    }
     setBusy('Google se login ho raha hai…')
     try {
-      const idToken = await googleIdToken(cfg.googleClientId)
       await signInWithGoogleIdToken(idToken)
       toast('Google se login ho gaya 🎉', 'success')
       onDone()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Google login nahi ho paya')
     } finally {
+      googlePending.current = false
       setBusy('')
     }
   }
@@ -453,9 +415,11 @@ function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
           <div className="my-3 flex items-center gap-2 text-[11px] text-slate-400">
             <span className="h-px flex-1 bg-slate-200" /> ya <span className="h-px flex-1 bg-slate-200" />
           </div>
-          <button className="btn btn-outline btn-block" disabled={!!busy} onClick={() => void google()}>
-            <span className="mr-1">🔵</span> Google se login karein
-          </button>
+          {cfg?.googleClientId ? (
+            <GoogleSignInButton clientId={cfg.googleClientId} disabled={!!busy} onCredential={token => void google(token)} onError={setErr} />
+          ) : (
+            <p className="text-xs text-slate-500">Google login ke liye Cloud setup me Google Client ID daalein.</p>
+          )}
         </>
       )}
 

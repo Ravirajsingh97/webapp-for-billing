@@ -188,6 +188,10 @@ Setup **ek baar** karna padta hai (free Firebase project, ~5 min) — app ke and
 
 5. **Project settings → Your apps → Web** → `firebaseConfig` copy karke app me paste karein
 6. **Authentication → Settings → Authorized domains** me apni site ka domain add karein
+7. Google login ke liye **Google Cloud Console → APIs & Services → Credentials → OAuth Web Client** kholein.
+   **Authorized JavaScript origins** me app ka exact origin add karein (local development: `http://localhost:5173`; deployed app: `https://your-domain`). Scheme aur port match hone chahiye; path/trailing slash mat daalein. Ye Firebase Authorized domains aur OAuth Redirect URIs se alag setting hai. `origin_mismatch` aaye to isi setting ko check karein.
+
+Google login official **Sign in with Google** button se popup kholta hai; browser me One Tap available hona zaroori nahi. Popup allow karein aur Google account select karein.
 
 Uske baad **Login / Sign up** — email+password ya **Google se login** (browser me). Auto-sync on ho to login ke baad sync khud
 chalta hai (local changes ke baad debounce + har 3 minute me), aur "Saari companies sync" se ek hi baar me sab companies sync ho jati hain.
