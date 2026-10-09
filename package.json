@@ -1,0 +1,47 @@
+{
+  "name": "showroom-manager-billing",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Showroom Manager — MyBillBook style GST billing & inventory app (offline PWA)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc -b --pretty false",
+    "smoke": "node smoke/preflight.mjs && esbuild smoke/run.tsx --bundle --platform=node --format=esm --loader:.tsx=tsx --external:jsdom --outfile=smoke/.build/run.mjs --log-level=error && node smoke/.build/run.mjs",
+    "setup": "npm install",
+    "verify": "tsc -b --pretty false && npm run smoke",
+    "build:preview": "npm run build && node -e \"const fs=require('fs');fs.rmSync('preview-build',{recursive:true,force:true});fs.cpSync('dist','preview-build',{recursive:true})\"",
+    "serve:static": "python3 -m http.server 4173 --bind 0.0.0.0 --directory preview-build",
+    "build:single": "node scripts/build-single-file.mjs",
+    "build:docs": "npm run build && npm run build:single && node -e \"const fs=require('fs'),path=require('path');const out=path.join('..','docs');fs.rmSync(out,{recursive:true,force:true});fs.cpSync('dist',out,{recursive:true});fs.copyFileSync('showroom-manager-app.html',path.join(out,'showroom-manager-app.html'));fs.writeFileSync(path.join(out,'.nojekyll'),'');console.log('docs/ ready (GitHub Pages branch-source + jsDelivr/githack ke liye)')\"",
+    "build:android": "npm run build && npm run build:single && node -e \"const fs=require('fs'),path=require('path');const out=path.join('..','app','src','main','assets','webapp');fs.rmSync(out,{recursive:true,force:true});fs.cpSync('dist',out,{recursive:true});fs.rmSync(path.join(out,'.nojekyll'),{force:true});fs.copyFileSync('showroom-manager-app.html',path.join(out,'showroom-manager-app.html'));console.log('Android assets ready:', out)\""
+  },
+  "dependencies": {
+    "dexie": "^4.2.0",
+    "dexie-react-hooks": "^1.1.7",
+    "fake-indexeddb": "^6.2.5",
+    "html2canvas-pro": "^1.5.11",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tesseract.js": "^6.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.1",
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "vite-plugin-pwa": "^1.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
