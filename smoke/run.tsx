@@ -667,7 +667,7 @@ async function main() {
           const expected = query.get('currentDocument.updateTime')
           if ((query.get('currentDocument.exists') === 'false' && docs.has(path)) || (expected !== null && expected !== (revisions.get(path) ?? 'initial'))) {
             conflicts++
-            return new Response(JSON.stringify({ error: { message: 'FAILED_PRECONDITION' } }), { status: 409 })
+            return new Response(JSON.stringify({ error: { status: 'FAILED_PRECONDITION', message: 'the stored version does not match the required update time.' } }), { status: 400 })
           }
           const fields = (body.fields ?? {}) as Record<string, unknown>
           const out: Record<string, unknown> = {}

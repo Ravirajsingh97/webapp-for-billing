@@ -396,8 +396,9 @@ export async function fsSet(path: string, data: Record<string, unknown>, expecte
   await requireUnlocked()
   assertContext(expected)
   if (!res.ok) {
-    const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
-    const code = (json.error?.message ?? 'FIRESTORE_ERROR').split(' ')[0]
+    const json = (await res.json().catch(() => ({}))) as { error?: { status?: string; message?: string } }
+    // Firestore returns HTTP 400 with a readable message for stale updateTime.
+    const code = json.error?.status || (json.error?.message ?? 'FIRESTORE_ERROR').split(' ')[0]
     if (res.status === 409 || res.status === 412 || code === 'FAILED_PRECONDITION' || code === 'ALREADY_EXISTS') throw new CloudError('SYNC_CONFLICT', 'Cloud data doosre device par badal gaya; dobara sync karein')
     throw new CloudError(code, 'Cloud me data save nahi ho paya — Firestore rules check karein')
   }
