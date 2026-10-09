@@ -212,7 +212,9 @@ Technical: `src/lib/cloud.ts` (Firebase Auth + Firestore REST, koi SDK nahi — 
 
 - Settings → **👤 Users & login** → naya user banayein (naam, role, 4-6 ank ka PIN).
 - **Jab tak koi user na bane, app bina login khulti hai** — pehla user banate hi current tab bhi lock hota hai. Disabled/malformed users login ko automatically band nahi karte.
-- Owner aur staff ka PIN sirf **logged-in owner** Settings se badal sakta hai. Login screen se PIN reset nahi hota. Pehla user hamesha owner hota hai; aakhri active owner ko disable/delete nahi kar sakte.
+- Owner aur staff ka PIN **logged-in owner** Settings se badal sakta hai. Pehla user hamesha owner hota hai; aakhri active owner ko disable/delete nahi kar sakte.
+- **Owner PIN recovery:** owner login → Settings → Users & login → **Owner PIN recovery code**. Code ek baar dikhta hai; phone se alag safe jagah likh kar rakhein. Login screen par owner chunein → **PIN bhool gaye? Recovery karein** → saved code aur naya PIN daalein. Code ek baar chalega; phir naye PIN se login karke naya code banayein. Naya code, normal PIN change, owner disable/demotion purana code revoke karte hain. Paanch wrong recovery attempts par ek minute lockout hota hai. Sirf company/owner-bound SHA-256 hash store hota hai; raw code, users aur PIN cloud sync/backup mein nahi jaate. Existing owner ko pehle code setup karna hoga; PIN/code dono missing hon to doosre logged-in owner ki madad chahiye.
+- **Cloud password recovery:** Cloud account → Login / Sign up → email likhein → **Password bhool gaye?** Firebase email link se cloud password badalta hai; local owner PIN apne recovery code se badalta hai. Google account password Google par recover karein.
 - PIN ka salted PBKDF2-SHA256 hash (210,000 iterations) phone me rehta hai. Purane hashes successful login par migrate hote hain. Secure Web Crypto unavailable ho to naya PIN save nahi hota. Session tab band hone par ya 8 ghante baad expire hota hai; PIN changes existing sessions revoke karte hain. Paanch wrong attempts ke baad ek minute lockout hota hai.
 
 ### 🏢 Company / Firm (multi-company)

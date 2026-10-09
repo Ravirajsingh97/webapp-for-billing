@@ -4,6 +4,7 @@ import { db } from '../lib/db'
 import { activeCompany, activeCompanyId, createCompany, listCompanies, switchCompany, renameCompany } from '../lib/company'
 import { tryLogin, currentUser, requireOwnerIfConfigured, type User } from '../lib/auth'
 import { Sheet, toast } from '../components/ui'
+import { OwnerPinRecovery } from '../components/OwnerRecovery'
 
 const initials = (name: string) =>
   name
@@ -61,6 +62,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [companySheet, setCompanySheet] = useState(false)
+  const [recovering, setRecovering] = useState(false)
 
   const actives = (users ?? []).filter((u) => u.active && u.pinHash)
 
@@ -161,7 +163,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
             {error ? <div className="mt-3 text-center text-[12px] font-semibold text-red-600">{error}</div> : null}
             {busy ? <div className="mt-2 text-center text-[12px] text-slate-500">Check kar rahe hain…</div> : null}
             <div className="mt-4 text-center text-[11px] text-slate-500">
-              PIN bhool gaye? Kisi logged-in owner se Settings mein naya PIN banwayein.
+              {selected.role === 'OWNER' ? <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setRecovering(true)}>PIN bhool gaye? Recovery karein</button> : 'PIN bhool gaye? Kisi logged-in owner se Settings mein naya PIN banwayein.'}
             </div>
           </div>
         )}
@@ -172,6 +174,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
       </div>
 
       <CompanySheet open={companySheet} onClose={() => setCompanySheet(false)} />
+      {recovering && selected ? <OwnerPinRecovery user={selected} onClose={() => setRecovering(false)} onRecovered={() => { setRecovering(false); setSelected(null); setPin(''); setError('') }} /> : null}
     </div>
   )
 }

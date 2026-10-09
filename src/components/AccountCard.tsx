@@ -5,6 +5,7 @@ import { activeCompany, activeCompanyId, listCompanies } from '../lib/company'
 import { addUser, deleteUser, logout, setUserPin, userCount, currentUser, updateUser, type User, type UserRole } from '../lib/auth'
 import { ConfirmDialog, Sheet, toast } from '../components/ui'
 import { CompanySheet } from '../screens/Auth'
+import { OwnerRecoverySetup } from './OwnerRecovery'
 
 const initial = (name: string) => name.trim().slice(0, 1).toUpperCase() || '👤'
 
@@ -25,6 +26,7 @@ export function AccountCard({ onLogout = defaultLogout }: { onLogout?: () => voi
   const [people, setPeople] = useState(0)
   const [companies, setCompanies] = useState(1)
   const [tick, setTick] = useState(0)
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
 
   const users = useLiveQuery(() => db.users.toArray(), [tick], [] as User[])
   const current = useLiveQuery(() => currentUser(), [tick, usersSheet])
@@ -79,7 +81,13 @@ export function AccountCard({ onLogout = defaultLogout }: { onLogout?: () => voi
             </button>
           ) : null}
         </div>
+        {current?.role === 'OWNER' ? <div className="mt-3 border-t border-slate-100 pt-3">
+          <button className="btn btn-outline btn-block" onClick={() => setRecoveryOpen(true)}>Owner PIN recovery code</button>
+          <p className="mt-2 text-[11px] text-slate-500">{current.recoveryHash ? 'Recovery code set hai. Naya banane par purana band ho jayega.' : 'PIN bhoolne se pehle apna recovery code bana kar safe jagah rakhein.'}</p>
+        </div> : null}
       </div>
+
+      {recoveryOpen ? <OwnerRecoverySetup onClose={() => setRecoveryOpen(false)} /> : null}
 
       <CompanySheet open={companySheet} onClose={() => setCompanySheet(false)} onChanged={() => setTick((t) => t + 1)} />
 

@@ -299,6 +299,7 @@ service cloud.firestore {
 }
 
 function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+  const pending = useRef(false)
   const [mode, setMode] = useState<'login' | 'signup'>('signup')
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
@@ -308,10 +309,12 @@ function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
   const cfg = getCloudConfig()
 
   const submit = async () => {
+    if (pending.current) return
     setErr('')
     if (!email.includes('@')) return setErr('Email theek se likhein')
     if (pass.length < 6) return setErr('Password kam se kam 6 characters ka rakhein')
     if (mode === 'signup' && pass !== pass2) return setErr('Dono password ek jaise likhein')
+    pending.current = true
     setBusy('Ruko, ho raha hai…')
     try {
       if (mode === 'signup') await signUpEmail(email.trim(), pass)
@@ -321,14 +324,16 @@ function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Login nahi ho paya')
     } finally {
+      pending.current = false
       setBusy('')
     }
   }
 
   const googlePending = useRef(false)
   const google = async (idToken: string) => {
-    if (googlePending.current || busy) return
+    if (googlePending.current || pending.current) return
     googlePending.current = true
+    pending.current = true
     setErr('')
     setBusy('Google se login ho raha hai…')
     try {
@@ -339,18 +344,25 @@ function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
       setErr(e instanceof Error ? e.message : 'Google login nahi ho paya')
     } finally {
       googlePending.current = false
+      pending.current = false
       setBusy('')
     }
   }
 
   const forgot = async () => {
+    if (pending.current) return
     setErr('')
     if (!email.includes('@')) return setErr('Pehle apna email likhein, phir "Password bhool gaye" dabayein')
+    pending.current = true
+    setBusy('Reset email bhej rahe hain…')
     try {
       await sendPasswordReset(email.trim())
       toast('Password reset ka email bhej diya 📧', 'success')
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Email nahi ja paya')
+    } finally {
+      pending.current = false
+      setBusy('')
     }
   }
 
@@ -367,10 +379,10 @@ function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
       }
     >
       <div className="mb-3 flex gap-2">
-        <button className="chip flex-1" data-active={mode === 'signup'} onClick={() => setMode('signup')} type="button">
+        <button className="chip flex-1" disabled={!!busy} data-active={mode === 'signup'} onClick={() => { setMode('signup'); setErr('') }} type="button">
           Naya account
         </button>
-        <button className="chip flex-1" data-active={mode === 'login'} onClick={() => setMode('login')} type="button">
+        <button className="chip flex-1" disabled={!!busy} data-active={mode === 'login'} onClick={() => { setMode('login'); setErr('') }} type="button">
           Login
         </button>
       </div>
@@ -424,7 +436,7 @@ function AuthSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
       )}
 
       <div className="mt-3 text-center">
-        <button className="btn btn-ghost btn-sm" onClick={() => void forgot()}>
+        <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => void forgot()}>
           Password bhool gaye?
         </button>
       </div>

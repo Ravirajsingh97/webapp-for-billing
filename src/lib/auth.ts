@@ -16,6 +16,9 @@ export interface User {
   createdAt: number
   loginFailures?: number
   lockedUntil?: number
+  recoveryHash?: string
+  recoveryFailures?: number
+  recoveryLockedUntil?: number
 }
 export const AUTH_CHANGE_EVENT = 'showroom-auth-change'
 const SESSION_MS = 8 * 60 * 60 * 1000
@@ -117,7 +120,7 @@ export async function updateUser(id: number, patch: Partial<Pick<User, 'name' | 
   await db.transaction('rw', db.users, async () => {
     await requireOwner()
     await protectLastOwner(id, patch.active === false || (patch.role !== undefined && patch.role !== 'OWNER'))
-    await db.users.update(id, patch)
+    await db.users.update(id, { ...patch, ...(patch.active === false || patch.role === 'STAFF' ? { recoveryHash: undefined } : {}) })
   })
   notify()
 }
@@ -125,8 +128,49 @@ export async function setUserPin(id: number, pin: string): Promise<void> {
   validatePin(pin)
   await requireOwner()
   const pinHash = await hashPin(pin)
-  await db.transaction('rw', db.users, async () => { await requireOwner(); await db.users.update(id, { pinHash, pinLength: pin.length, loginFailures: 0, lockedUntil: 0 }) })
+  await db.transaction('rw', db.users, async () => { await requireOwner(); await db.users.update(id, { pinHash, pinLength: pin.length, loginFailures: 0, lockedUntil: 0, recoveryHash: undefined }) })
   notify()
+}
+
+const recoveryDigest = async (user: User, code: string, companyId: string) =>
+  hex(await subtle().digest('SHA-256', new TextEncoder().encode(`showroom-recovery|${companyId}|${user.id}|${user.createdAt}|${code}`)))
+
+/** Only the current owner can issue their own recovery code. Plaintext is shown once. */
+export async function createOwnerRecoveryCode(): Promise<string> {
+  const companyId = activeCompanyId()
+  const code = hex(crypto.getRandomValues(new Uint8Array(16)))
+  await db.transaction('rw', db.users, async () => {
+    const user = await currentUser()
+    if (user?.role !== 'OWNER') throw new Error('Recovery code ke liye owner login chahiye')
+    const recoveryHash = await Dexie.waitFor(recoveryDigest(user, code, companyId))
+    if (activeCompanyId() !== companyId) throw new Error('Company badal gayi; dobara try karein')
+    await db.users.update(user.id!, { recoveryHash, recoveryFailures: 0, recoveryLockedUntil: 0 })
+  })
+  return code.match(/.{4}/g)!.join('-').toUpperCase()
+}
+
+/** A code is consumed atomically; recovery changes the PIN without opening a session. */
+export async function recoverOwnerPin(userId: number, recoveryCode: string, pin: string): Promise<void> {
+  validatePin(pin)
+  const companyId = activeCompanyId()
+  const code = recoveryCode.replace(/[\s-]/g, '').toLowerCase()
+  const recovered = await db.transaction('rw', db.users, async () => {
+    const user = await db.users.get(userId)
+    if (!user?.active || user.role !== 'OWNER' || !user.recoveryHash) throw new Error('Recovery code set nahi hai. Kisi doosre logged-in owner se PIN badalwayein.')
+    if ((user.recoveryLockedUntil ?? 0) > Date.now()) throw new Error('Bahut galat recovery attempts hue. Ek minute baad try karein')
+    const actual = /^[a-f0-9]{32}$/.test(code) ? await Dexie.waitFor(recoveryDigest(user, code, companyId)) : ''
+    if (!actual || actual !== user.recoveryHash) {
+      const failures = (user.recoveryFailures ?? 0) + 1
+      await db.users.update(userId, { recoveryFailures: failures >= 5 ? 0 : failures, recoveryLockedUntil: failures >= 5 ? Date.now() + 60_000 : 0 })
+      return false
+    }
+    const pinHash = await Dexie.waitFor(hashPin(pin))
+    if (activeCompanyId() !== companyId) throw new Error('Company badal gayi; dobara try karein')
+    await db.users.update(userId, { pinHash, pinLength: pin.length, loginFailures: 0, lockedUntil: 0, recoveryHash: undefined, recoveryFailures: 0, recoveryLockedUntil: 0 })
+    return true
+  })
+  if (!recovered) throw new Error('Recovery code galat hai — dobara check karein')
+  clearSession()
 }
 export async function deleteUser(id: number): Promise<void> {
   await db.transaction('rw', db.users, async () => { await requireOwner(); await protectLastOwner(id, true); await db.users.delete(id) })

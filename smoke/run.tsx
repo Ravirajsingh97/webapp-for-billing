@@ -852,6 +852,9 @@ async function main() {
   const { runGoogleLoginRegressions } = await import('./googleLogin')
   await runGoogleLoginRegressions(check)
 
+  const { runRecoveryRegressions } = await import('./recovery')
+  await runRecoveryRegressions(check)
+
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
   if (failed.length) {
