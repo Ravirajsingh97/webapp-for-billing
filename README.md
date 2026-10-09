@@ -128,8 +128,8 @@ README में कोई secret, API key या Firebase config डालन�
 2. CodeRabbit का **Coding Agent** इस्तेमाल करना हो तो [CodeRabbit Code](https://app.coderabbit.ai/code)
    में इस repository और `main` branch को चुनें। Automatic environment में Node **22** रखें;
    ज़रूरत पड़े तो setup command `npm ci` और startup/verification command `npm run verify` दें।
-3. CodeRabbit सामान्यतः **pull request (PR)** पर review करता है, केवल README बदलने या सीधे `main` पर
-   push करने से नहीं। PR को draft न रखें और उसमें कम-से-कम एक code/config change हो। Review न आए तो PR में
+3. CodeRabbit सामान्यतः **pull request (PR)** पर review करता है, सीधे `main` पर push करने से नहीं।
+   PR को draft न रखें; README-only/documentation PR भी review हो सकता है। Review न आए तो PR में
    `@coderabbitai review` comment करें।
 
 ### इस repo में change करके PR बनाना
