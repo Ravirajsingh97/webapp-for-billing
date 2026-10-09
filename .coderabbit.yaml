@@ -1,0 +1,41 @@
+# CodeRabbit repository configuration.
+# Keep this file at the repository root so CodeRabbit can load it for every PR.
+language: "en-US"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/preview-build/**"
+    - "!**/coverage/**"
+    - "!**/smoke/.build/**"
+    - "!**/*.lock"
+  path_instructions:
+    - path: "src/**/*.ts"
+      instructions: |
+        Review this TypeScript as an offline-first React PWA. Pay special attention to
+        IndexedDB/Dexie transactions, sync and merge safety, GST and money arithmetic,
+        authentication boundaries, error handling, and backwards compatibility with
+        existing local data. Do not suggest a server, login, or network dependency for
+        features that are intentionally local-first.
+    - path: "src/**/*.tsx"
+      instructions: |
+        Review React components for state and effect correctness, responsive/mobile
+        behavior, accessibility, and preserving the billing flows described in README.md.
+        Watch for duplicate saves, stock or payment double-counting, unsafe user input,
+        and regressions in the offline/demo mode.
+    - path: "smoke/**/*.ts"
+      instructions: |
+        Keep smoke tests deterministic in Node with jsdom and fake IndexedDB. Flag tests
+        that can leak database state, depend on real network services, or fail to clean up.
+
+chat:
+  auto_reply: true
