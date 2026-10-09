@@ -504,3 +504,58 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
   .form-page { width: 100%; }
   .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* A4 letterhead invoice: fixed paper geometry, scaled by PaperScaler on phones. */
+.paper-letterhead {
+  min-height: 1123px;
+  padding: 26px 30px 22px;
+  display: flex;
+  flex-direction: column;
+  font-family: Arial, 'Noto Sans Devanagari', sans-serif;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.letterhead-header { border-top: 7px solid #c8eaf0; }
+.letterhead-title { text-align: center; font-weight: 700; padding: 4px 0 12px; }
+.letterhead-brand { display: flex; align-items: center; gap: 18px; padding: 0 12px 12px; }
+.letterhead-brand h1 { flex: 1; min-width: 0; font-size: 30px; font-weight: 800; line-height: 1.05; color: #b32624; text-transform: uppercase; overflow-wrap: anywhere; }
+.letterhead-logo { width: 108px; height: 72px; object-fit: contain; }
+.letterhead-tagline { width: 215px; color: #272052; font-size: 11px; white-space: pre-line; }
+.letterhead-contact { border-block: 2px solid #a8413c; padding: 5px 12px; text-align: center; color: #272052; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; margin-bottom: 14px; }
+.letterhead-band { background: #c8eaf0; text-align: center; border-block: 1px solid #52666b; padding: 3px 6px; }
+.letterhead-parties { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; padding: 7px 3px 12px; min-height: 116px; overflow-wrap: anywhere; }
+.letterhead-multiline { white-space: pre-line; overflow-wrap: anywhere; }
+.paper-letterhead table { table-layout: fixed; }
+.paper-letterhead th, .paper-letterhead td { border-color: #252525; font-size: 10px; line-height: 1.25; padding: 2px 3px; overflow-wrap: anywhere; }
+.paper-letterhead th { background: #c8eaf0; text-align: center; font-weight: 500; vertical-align: middle; }
+.paper-letterhead .letterhead-items { border: 1px solid #252525; }
+.paper-letterhead .letterhead-items tbody td { border-block: 0; }
+.paper-letterhead .letterhead-items .letterhead-total td { border-top: 1px solid #252525; font-weight: 700; }
+.letterhead-item-detail { font-size: 8px; color: #444; }
+.letterhead-center { text-align: center; }
+.letterhead-number { text-align: right; font-variant-numeric: tabular-nums; }
+.letterhead-summary-label { text-align: right; }
+.letterhead-total td:first-child { text-align: right; }
+.letterhead-amount-words { display: flex; justify-content: space-between; gap: 8px; padding: 3px; background: #c8eaf0; border: 1px solid #252525; border-top: 0; }
+.letterhead-amount-words > :last-child { white-space: nowrap; }
+.letterhead-tax { margin-top: 5px; }
+.letterhead-tax .letterhead-band { border: 1px solid #252525; border-bottom: 0; }
+.letterhead-tax th { background: #fff; }
+.letterhead-tax-total { font-weight: 700; }
+.letterhead-tax-words { border: 1px solid #252525; border-top: 0; padding: 3px; }
+.letterhead-footer { margin-top: auto; padding-top: 6px; }
+.letterhead-declaration { font-size: 9px; overflow-wrap: anywhere; }
+.letterhead-signatures { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; min-height: 90px; margin-top: 6px; }
+.letterhead-signatures > div { min-width: 0; flex: 1; }
+.letterhead-authorised { text-align: right; overflow-wrap: anywhere; }
+.letterhead-signature-space { min-height: 55px; display: flex; justify-content: flex-end; align-items: center; }
+.letterhead-signature-space img { max-height: 52px; max-width: 170px; object-fit: contain; }
+.letterhead-payment-qr { display: flex; gap: 8px; align-items: center; font-size: 9px; margin-bottom: 6px; overflow-wrap: anywhere; }
+.letterhead-payment-qr svg { flex-shrink: 0; }
+.letterhead-generated { margin-top: 4px; border: 0; font-size: 9px; }
+@media print {
+  .paper-letterhead { min-height: 278mm; padding: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .paper-letterhead th, .paper-letterhead td { font-size: 9px; padding: 1.5px 3px; }
+  .letterhead-items thead, .letterhead-tax thead { display: table-header-group; }
+  .letterhead-item-row, .letterhead-summary-row, .letterhead-total, .letterhead-tax tr, .letterhead-signatures { break-inside: avoid; }
+}

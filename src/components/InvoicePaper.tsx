@@ -165,257 +165,190 @@ export function InvoicePaper({
     )
   }
 
-  // ---------------- A4 ----------------
+  // ---------------- A4 letterhead ----------------
+  const columns = meta.noTax ? 8 : 9
+  const summaries = [
+    { label: 'Subtotal', value: t.taxable },
+    ...(t.billDiscount ? [{ label: 'Bill discount', value: -t.billDiscount }] : []),
+    ...(!meta.noTax && t.tax ? t.interState
+      ? [{ label: 'IGST', value: t.igst }]
+      : [{ label: 'CGST', value: t.cgst }, { label: 'SGST', value: t.sgst }] : []),
+    ...(t.charges ? [{ label: 'Other charges', value: t.charges }] : []),
+    ...(Math.abs(t.roundOff) >= 0.01 ? [{ label: 'Rounding off', value: t.roundOff }] : []),
+  ]
+  // Allocate odd tax paise across HSN groups so both tax columns match the invoice.
+  let cgstPaiseLeft = Math.round(t.cgst * 100) - hsn.reduce((sum, h) => sum + Math.floor(Math.round(h.tax * 100) / 2), 0)
+  const taxRows = hsn.map(h => {
+    const paise = Math.round(h.tax * 100)
+    const extra = !t.interState && paise % 2 !== 0 && cgstPaiseLeft > 0 ? 1 : 0
+    cgstPaiseLeft -= extra
+    const cgst = (Math.floor(paise / 2) + extra) / 100
+    return { ...h, cgst, sgst: round2(h.tax - cgst) }
+  })
+
   return (
-    <div className="paper mx-auto" style={{ width: A4_WIDTH, padding: 26, fontSize: 11 }}>
-      <div style={{ border: '1.5px solid #0f172a' }}>
-        {/* Header */}
-        <div className="flex" style={{ borderBottom: '1.5px solid #0f172a' }}>
-          <div className="flex flex-1 items-start gap-3 p-3">
-            {business.logoDataUrl ? (
-              <img src={business.logoDataUrl} alt="logo" style={{ width: 54, height: 54, objectFit: 'contain' }} />
-            ) : (
-              <div
-                style={{
-                  width: 54,
-                  height: 54,
-                  borderRadius: 8,
-                  background: '#312e81',
-                  color: '#fff',
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 22,
-                  fontWeight: 800,
-                }}
-              >
-                {business.name.slice(0, 1).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0">
-              <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: 0.3 }}>{business.name}</div>
-              {business.tagline ? <div style={{ fontSize: 10.5, color: '#334155' }}>{business.tagline}</div> : null}
-              <div style={{ fontSize: 10.5, lineHeight: 1.45, color: '#0f172a' }}>
-                {business.address}
-                {business.phone ? <div>Mobile: {business.phone}{business.email ? ` • ${business.email}` : ''}</div> : null}
-                {business.gstin ? <div><b>GSTIN: {business.gstin}</b></div> : null}
-              </div>
-            </div>
-          </div>
-          <div style={{ width: 240, borderLeft: '1.5px solid #0f172a' }}>
-            <div
-              style={{
-                textAlign: 'center',
-                fontWeight: 800,
-                fontSize: 13,
-                padding: '4px 0',
-                borderBottom: '1px solid #0f172a',
-                background: '#eef2ff',
-              }}
-            >
-              {title}
-            </div>
-            <div style={{ padding: '5px 8px', fontSize: 10.5, lineHeight: 1.6 }}>
-              <div className="flex justify-between"><span>Invoice No.</span><b>{invoice.number}</b></div>
-              <div className="flex justify-between"><span>Date</span><b>{fmtDate(invoice.date)}</b></div>
-              {invoice.dueDate ? (
-                <div className="flex justify-between"><span>Due Date</span><b>{fmtDate(invoice.dueDate)}</b></div>
-              ) : null}
-              <div className="flex justify-between">
-                <span>Place of Supply</span>
-                <b>{invoice.placeOfSupply ? `${invoice.placeOfSupply}-${stateName(invoice.placeOfSupply)}` : '—'}</b>
-              </div>
-              {invoice.poNumber ? (
-                <div className="flex justify-between"><span>PO / Ref</span><b>{invoice.poNumber}</b></div>
-              ) : null}
-            </div>
-          </div>
+    <div className="paper paper-letterhead mx-auto" style={{ width: A4_WIDTH }}>
+      <header className="letterhead-header">
+        <div className="letterhead-title">{title}</div>
+        <div className="letterhead-brand">
+          {business.logoDataUrl ? <img className="letterhead-logo" src={business.logoDataUrl} alt="Business logo" /> : null}
+          <h1>{business.name}</h1>
+          {business.tagline ? <div className="letterhead-tagline">{business.tagline}</div> : null}
         </div>
-
-        {/* Party */}
-        <div className="flex" style={{ borderBottom: '1.5px solid #0f172a' }}>
-          <div className="flex-1 p-2.5" style={{ borderRight: '1px solid #94a3b8' }}>
-            <div style={{ fontSize: 9.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-              {meta.isSale || meta.negative ? 'Bill To' : meta.isPurchase ? 'Supplier (bill from)' : 'Party Details'}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>{invoice.partyName || 'Cash Sale / Walk-in Customer'}</div>
-            <div style={{ fontSize: 10.5, lineHeight: 1.5 }}>
-              {invoice.partyAddress}
-              {invoice.partyPhone ? <div>Mobile: {invoice.partyPhone}</div> : null}
-              {invoice.partyGstin ? <div>GSTIN: {invoice.partyGstin}</div> : null}
-            </div>
-          </div>
-          <div className="p-2.5" style={{ width: 300 }}>
-            <div style={{ fontSize: 9.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-              Transport / Dispatch
-            </div>
-            <div style={{ fontSize: 10.5, lineHeight: 1.5 }}>
-              {invoice.transportName ? <div>Transport: {invoice.transportName}</div> : null}
-              {invoice.vehicleNo ? <div>Vehicle No: {invoice.vehicleNo}</div> : null}
-              {invoice.eWayBill ? <div>E-Way Bill: {invoice.eWayBill}</div> : null}
-              <div>
-                Payment:{' '}
-                {t.paid > 0
-                  ? meta.isPurchase
-                    ? `${money(t.paid)} paid`
-                    : `${money(t.paid)} received`
-                  : meta.isPurchase
-                    ? 'Payable / udhaar'
-                    : 'Credit / Due'}
-              </div>
-            </div>
-          </div>
+        <div className="letterhead-contact">
+          {business.address ? <div>{business.address}</div> : null}
+          {[business.phone && `Mob: ${business.phone}`, business.email && `Email: ${business.email}`].filter(Boolean).join(' • ')}
         </div>
+        {business.gstin ? <div className="letterhead-band">GSTIN/UIN: <strong>{business.gstin}</strong></div> : null}
+      </header>
 
-        {/* Items */}
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: 26 }}>#</th>
-              <th>Item Description</th>
-              <th style={{ width: 58 }}>HSN</th>
-              <th style={{ width: 46 }}>Qty</th>
-              <th style={{ width: 34 }}>Unit</th>
-              <th style={{ width: 68 }}>Rate</th>
-              <th style={{ width: 46 }}>Disc%</th>
-              <th style={{ width: 74 }}>Taxable</th>
-              {meta.noTax ? null : <th style={{ width: 40 }}>GST%</th>}
-              {meta.noTax ? null : <th style={{ width: 62 }}>GST Amt</th>}
-              <th style={{ width: 78 }}>Amount</th>
+      <section className="letterhead-parties">
+        <div>
+          <div>{meta.isPurchase ? 'Supplier (Bill from)' : 'Buyer (Bill to)'}</div>
+          <strong>{invoice.partyName || 'Cash Sale / Walk-in Customer'}</strong>
+          {invoice.partyAddress ? <div className="letterhead-multiline">{invoice.partyAddress}</div> : null}
+          {invoice.partyPhone ? <div>Mobile: {invoice.partyPhone}</div> : null}
+          {invoice.partyGstin ? <div>GSTIN/UIN: {invoice.partyGstin}</div> : null}
+          <div>Place of Supply: {stateName(invoice.placeOfSupply) || '—'}{invoice.placeOfSupply ? ` • Code: ${invoice.placeOfSupply}` : ''}</div>
+          {invoice.transportName ? <div>Transport: {invoice.transportName}</div> : null}
+          {invoice.vehicleNo ? <div>Motor Vehicle No.: {invoice.vehicleNo}</div> : null}
+          {invoice.eWayBill ? <div>E-Way Bill No.: {invoice.eWayBill}</div> : null}
+        </div>
+        <div className="letterhead-invoice-details">
+          <div>Invoice No.: <strong>{invoice.number || 'Draft'}</strong></div>
+          <div>Dated: <strong>{fmtDate(invoice.date)}</strong></div>
+          {invoice.dueDate ? <div>Due date: {fmtDate(invoice.dueDate)}</div> : null}
+          {invoice.poNumber ? <div>PO / Reference: {invoice.poNumber}</div> : null}
+          <div>Payment: {t.paid > 0 ? `${money(t.paid)} ${meta.isPurchase ? 'paid' : 'received'}` : meta.isPurchase ? 'Payable / credit' : 'Credit / due'}</div>
+          <div>{due ? `Balance due: ${money(t.due)}` : 'Status: PAID'}</div>
+        </div>
+      </section>
+
+      <table className="letterhead-items">
+        <colgroup>
+          <col style={{ width: '4%' }} />
+          <col style={{ width: meta.noTax ? '39%' : '32%' }} />
+          {!meta.noTax ? <col style={{ width: '7%' }} /> : null}
+          <col style={{ width: '8%' }} />
+          <col style={{ width: '10%' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '11%' }} />
+          <col style={{ width: '15%' }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Sl.<br />No.</th>
+            <th>Description of<br />Goods and Services</th>
+            {!meta.noTax ? <th>GST<br />Rate</th> : null}
+            <th>Quantity</th><th>Rate</th><th>per</th><th>Disc. %</th><th>Disc. Amt</th><th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoice.items.map((line, i) => (
+            <tr className="letterhead-item-row" key={line.id}>
+              <td className="letterhead-center">{i + 1}</td>
+              <td>
+                <strong>{line.name}</strong>
+                {line.hsn || line.code || line.brand ? <div className="letterhead-item-detail">{[line.hsn && `HSN/SAC: ${line.hsn}`, line.code, line.brand].filter(Boolean).join(' • ')}</div> : null}
+              </td>
+              {!meta.noTax ? <td className="letterhead-center">{quantity(line.gstPercent)}%</td> : null}
+              <td className="letterhead-number">{quantity(line.qty)}</td>
+              <td className="letterhead-number">{num(line.rate)}</td>
+              <td className="letterhead-center">{line.unit}</td>
+              <td className="letterhead-number">{line.discountPercent ? quantity(line.discountPercent) : '—'}</td>
+              <td className="letterhead-number">{t.lines[i]?.discount ? num(t.lines[i].discount) : '—'}</td>
+              <td className="letterhead-number">{num(t.lines[i]?.taxable ?? 0)}</td>
             </tr>
-          </thead>
-          <tbody>
-            {invoice.items.map((l, i) => (
-              <tr key={l.id}>
-                <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{l.name}</div>
-                  <div style={{ fontSize: 9.5, color: '#475569' }}>
-                    {[l.code && `Code: ${l.code}`, l.brand].filter(Boolean).join(' • ')}
-                  </div>
-                </td>
-                <td style={{ textAlign: 'center' }}>{l.hsn || '—'}</td>
-                <td style={{ textAlign: 'right' }}>{quantity(l.qty)}</td>
-                <td style={{ textAlign: 'center' }}>{l.unit}</td>
-                <td style={{ textAlign: 'right' }}>{num(l.rate)}</td>
-                <td style={{ textAlign: 'right' }}>{l.discountPercent ? num(l.discountPercent, 0) : '—'}</td>
-                <td style={{ textAlign: 'right' }}>{num(t.lines[i]?.taxableAfterBillDiscount ?? 0)}</td>
-                {meta.noTax ? null : <td style={{ textAlign: 'center' }}>{num(l.gstPercent, 0)}%</td>}
-                {meta.noTax ? null : <td style={{ textAlign: 'right' }}>{num(t.lines[i]?.tax ?? 0)}</td>}
-                <td style={{ textAlign: 'right', fontWeight: 600 }}>{num(t.lines[i]?.total ?? 0)}</td>
-              </tr>
-            ))}
-            {invoice.items.length === 0 ? (
-              <tr>
-                <td colSpan={meta.noTax ? 9 : 11} style={{ textAlign: 'center', color: '#64748b' }}>
-                  No items
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+          ))}
+          {!invoice.items.length ? <tr><td colSpan={columns} className="letterhead-center">No items</td></tr> : null}
+          {summaries.map(row => (
+            <tr className="letterhead-summary-row" key={row.label}>
+              <td /><td className="letterhead-summary-label"><strong>{row.label}</strong></td>
+              {Array.from({ length: columns - 3 }, (_, i) => <td key={i} />)}
+              <td className="letterhead-number">{num(row.value)}</td>
+            </tr>
+          ))}
+          <tr className="letterhead-spacer" aria-hidden="true" style={{ height: Math.max(16, 230 - invoice.items.length * 25) }}>
+            {Array.from({ length: columns }, (_, i) => <td key={i} />)}
+          </tr>
+          <tr className="letterhead-total">
+            <td colSpan={meta.noTax ? 2 : 3}>Total</td>
+            <td className="letterhead-number">{quantity(t.totalQty)}</td>
+            <td colSpan={4} />
+            <td className="letterhead-number">{money(t.grandTotal)}</td>
+          </tr>
+        </tbody>
+      </table>
 
-        {/* Totals */}
-        <div className="flex" style={{ borderTop: '1.5px solid #0f172a' }}>
-          <div className="flex-1 p-2.5" style={{ borderRight: '1px solid #94a3b8' }}>
-            <div style={{ fontSize: 10.5 }}>
-              <b>Amount in words:</b> {amountInWords(t.grandTotal)}
-            </div>
-            {!meta.noTax && hsn.length > 0 ? (
-              <table style={{ marginTop: 6 }}>
-                <thead>
-                  <tr>
-                    <th>HSN</th>
-                    <th>Taxable</th>
-                    <th>GST%</th>
-                    <th>CGST</th>
-                    <th>SGST</th>
-                    {t.interState ? <th>IGST</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {hsn.map((h) => (
-                    <tr key={`${h.hsn}|${h.rate}`}>
-                      <td>{h.hsn}</td>
-                      <td style={{ textAlign: 'right' }}>{num(h.taxable)}</td>
-                      <td style={{ textAlign: 'center' }}>{num(h.rate, 0)}%</td>
-                      <td style={{ textAlign: 'right' }}>{t.interState ? '—' : num(round2(h.tax / 2))}</td>
-                      <td style={{ textAlign: 'right' }}>{t.interState ? '—' : num(round2(h.tax - round2(h.tax / 2)))}</td>
-                      {t.interState ? <td style={{ textAlign: 'right' }}>{num(h.tax)}</td> : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-            {bankLine ? (
-              <div style={{ fontSize: 10, marginTop: 6 }}>
-                <b>Bank:</b> {bankLine}
-              </div>
-            ) : null}
-            {qr ? (
-              <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
-                <QRCodeSVG value={qr} size={78} level="M" />
-                <div style={{ fontSize: 10 }}>
-                  <b>Scan &amp; Pay {money(t.due)}</b>
-                  <div>UPI: {business.upiId}</div>
-                  <div style={{ color: '#475569' }}>Phone se QR scan karke payment karein</div>
-                </div>
-              </div>
-            ) : null}
-            <div style={{ fontSize: 9.5, marginTop: 6, whiteSpace: 'pre-line', color: '#334155' }}>
-              <b>Terms &amp; Conditions:</b>
-              {'\n'}
-              {invoice.terms || business.terms}
-            </div>
+      <div className="letterhead-amount-words">
+        <span>Amount Chargeable (in words): <strong>{amountInWords(t.grandTotal)}</strong></span>
+        <span>E. &amp; O.E.</span>
+      </div>
+
+      {!meta.noTax && taxRows.length > 0 ? (
+        <section className="letterhead-tax">
+          <div className="letterhead-band"><strong>Tax Analysis</strong></div>
+          <table>
+            <thead>
+              <tr>
+                <th rowSpan={2}>HSN/SAC</th><th rowSpan={2}>Taxable<br />Value</th>
+                {t.interState ? <th colSpan={2}>IGST</th> : <><th colSpan={2}>CGST</th><th colSpan={2}>SGST/UTGST</th></>}
+                <th rowSpan={2}>Total Tax<br />Amount</th>
+              </tr>
+              <tr>
+                <th>Rate</th><th>Amount</th>
+                {!t.interState ? <><th>Rate</th><th>Amount</th></> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {taxRows.map(h => (
+                <tr key={`${h.hsn}|${h.rate}`}>
+                  <td>{h.hsn}</td><td className="letterhead-number">{num(h.taxable)}</td>
+                  {t.interState ? <><td className="letterhead-number">{quantity(h.rate)}%</td><td className="letterhead-number">{num(h.tax)}</td></> : (
+                    <><td className="letterhead-number">{quantity(h.rate / 2)}%</td><td className="letterhead-number">{num(h.cgst)}</td><td className="letterhead-number">{quantity(h.rate / 2)}%</td><td className="letterhead-number">{num(h.sgst)}</td></>
+                  )}
+                  <td className="letterhead-number">{num(h.tax)}</td>
+                </tr>
+              ))}
+              <tr className="letterhead-tax-total">
+                <td>Total</td><td className="letterhead-number">{num(t.taxableNet)}</td>
+                {t.interState ? <><td /><td className="letterhead-number">{num(t.igst)}</td></> : <><td /><td className="letterhead-number">{num(t.cgst)}</td><td /><td className="letterhead-number">{num(t.sgst)}</td></>}
+                <td className="letterhead-number">{num(t.tax)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="letterhead-tax-words">Tax Amount (in words): <strong>{amountInWords(t.tax)}</strong></div>
+        </section>
+      ) : null}
+
+      <div className="letterhead-footer">
+        <div className="letterhead-declaration">
+          <strong>Declaration</strong>
+          <div>We declare that this {title.toLowerCase()} shows the actual price of the goods described and that all particulars are true and correct.</div>
+          {invoice.notes ? <div className="letterhead-multiline"><strong>Notes: </strong>{invoice.notes}</div> : null}
+          {invoice.terms || business.terms ? <div className="letterhead-multiline"><strong>Terms &amp; Conditions: </strong>{invoice.terms || business.terms}</div> : null}
+          {bankLine ? <div><strong>Bank: </strong>{bankLine}</div> : null}
+        </div>
+        <div className="letterhead-signatures">
+          <div>
+            {qr ? <div className="letterhead-payment-qr"><QRCodeSVG value={qr} size={68} level="M" /><span>Scan &amp; Pay {money(t.due)}<br />{business.upiId}</span></div> : null}
+            <strong>Customer's Seal and Signature</strong>
           </div>
-          <div style={{ width: 262, padding: '6px 10px' }}>
-            <TotalRow l="Total MRP / Gross" v={num(t.gross)} />
-            {t.lineDiscount > 0 ? <TotalRow l="Item Discount" v={'-' + num(t.lineDiscount)} /> : null}
-            {t.billDiscount > 0 ? <TotalRow l="Bill Discount" v={'-' + num(t.billDiscount)} /> : null}
-            <TotalRow l="Taxable Amount" v={num(t.taxableNet)} />
-            {t.interState ? (
-              <TotalRow l="IGST" v={num(t.igst)} />
-            ) : (
-              <>
-                <TotalRow l="CGST" v={num(t.cgst)} />
-                <TotalRow l="SGST" v={num(t.sgst)} />
-              </>
-            )}
-            {t.charges ? <TotalRow l="Other Charges" v={num(t.charges)} /> : null}
-            {Math.abs(t.roundOff) >= 0.01 ? <TotalRow l="Round Off" v={num(t.roundOff)} /> : null}
-            <div
-              className="flex items-center justify-between"
-              style={{ borderTop: '1.5px solid #0f172a', marginTop: 4, paddingTop: 4 }}
-            >
-              <span style={{ fontWeight: 800, fontSize: 12 }}>GRAND TOTAL</span>
-              <span style={{ fontWeight: 800, fontSize: 15 }}>{money(t.grandTotal)}</span>
-            </div>
-            {t.paid > 0 ? <TotalRow l="Paid" v={num(t.paid)} /> : null}
-            <TotalRow l={due ? 'Balance Due' : 'Status'} v={due ? money(t.due) : 'PAID'} strong />
-            <div style={{ height: 44 }} />
-            <div style={{ textAlign: 'center', fontSize: 10 }}>
-              {business.signatureDataUrl ? (
-                <img src={business.signatureDataUrl} alt="sign" style={{ height: 34, margin: '0 auto' }} />
-              ) : null}
-              <div style={{ borderTop: '1px solid #334155', paddingTop: 2 }}>For {business.name}</div>
-              <div style={{ color: '#64748b' }}>Authorised Signatory</div>
-            </div>
+          <div className="letterhead-authorised">
+            <strong>For {business.name}</strong>
+            <div className="letterhead-signature-space">{business.signatureDataUrl ? <img src={business.signatureDataUrl} alt="Authorised signature" /> : null}</div>
+            <strong>Authorised Signatory</strong>
           </div>
         </div>
-      </div>
-      <div style={{ textAlign: 'center', fontSize: 9, color: '#475569', marginTop: 4 }}>
-        This is a computer generated {title.toLowerCase()}. Subject to {business.stateName || 'local'} jurisdiction.
-        {invoice.docType === 'ESTIMATE' ? ' Ye quotation/estimate hai, pakka bill nahi.' : ''}
+        <div className="letterhead-band letterhead-generated">
+          This is a computer generated {title.toLowerCase()}.
+          {invoice.docType === 'ESTIMATE' ? ' This is a quotation, not a tax invoice.' : ''}
+        </div>
       </div>
     </div>
   )
 }
-
-const TotalRow = ({ l, v, strong }: { l: string; v: string; strong?: boolean }) => (
-  <div className="flex justify-between" style={{ fontSize: strong ? 12 : 11, padding: '1.5px 0' }}>
-    <span style={{ color: strong ? '#0f172a' : '#475569', fontWeight: strong ? 700 : 500 }}>{l}</span>
-    <span className={strong ? 'num' : 'num'} style={{ fontWeight: strong ? 800 : 600 }}>{v}</span>
-  </div>
-)
 
 const Line = ({ l, r }: { l: string; r: string }) => (
   <div className="flex justify-between">
