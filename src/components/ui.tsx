@@ -171,7 +171,7 @@ export function Segmented<T extends string>({
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`min-w-0 flex-1 break-words text-center font-semibold transition ${
+          className={`min-w-0 flex-1 rounded-[10px] break-words text-center font-semibold transition ${
             size === 'sm' ? 'px-2 py-1.5 text-[11px]' : 'px-2.5 py-2 text-xs'
           } ${value === o.value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}
         >
