@@ -32,6 +32,12 @@ reviews:
         behavior, accessibility, and preserving the billing flows described in README.md.
         Watch for duplicate saves, stock or payment double-counting, unsafe user input,
         and regressions in the offline/demo mode.
+    - path: "src/**/*.css"
+      instructions: |
+        Review responsive behavior across 320px mobile, tablet, and desktop widths. Check
+        breakpoint overlaps, horizontal overflow, safe-area spacing, touch target sizes,
+        readable tables, and print styles. Prefer small reusable layout rules over
+        page-specific hacks.
     - path: "smoke/**/*.ts"
       instructions: |
         Keep smoke tests deterministic in Node with jsdom and fake IndexedDB. Flag tests
