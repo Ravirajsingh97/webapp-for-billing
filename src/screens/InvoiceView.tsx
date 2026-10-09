@@ -37,6 +37,7 @@ export function InvoiceView({
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [busy, setBusy] = useState(false)
   const shareRef = useRef<HTMLDivElement>(null)
+  const paymentHistoryRef = useRef<HTMLElement>(null)
 
   const t = useMemo(
     () => (invoice ? computeTotals(invoice, business.stateCode) : null),
@@ -187,6 +188,15 @@ export function InvoiceView({
                 : `💰 Payment receive karein (baaki ${money(t.due)})`}
             </button>
           ) : null}
+          <button
+            className="btn btn-outline col-span-full"
+            onClick={() => {
+              paymentHistoryRef.current?.scrollIntoView({ block: 'start' })
+              paymentHistoryRef.current?.focus({ preventScroll: true })
+            }}
+          >
+            ↓ Payment history ({invoice.payments.length})
+          </button>
         </div>
 
         {/* Paper preview */}
@@ -209,32 +219,33 @@ export function InvoiceView({
         </div>
 
         {/* Payment history */}
-        {invoice.payments.length ? (
-          <div className="card mt-3">
-            <div className="text-[13px] font-bold text-slate-700">
-              {isPurchase ? 'Supplier ko kiye payment' : 'Payment history'}
-            </div>
-            <div className="mt-1">
-              {invoice.payments.map((p) => (
-                <div key={p.id} className="flex items-center justify-between border-b border-slate-100 py-2 text-[13px] last:border-0">
-                  <div>
-                    <div className="font-semibold text-slate-800">{money(p.amount)} • {p.mode}</div>
-                    <div className="text-[11px] text-slate-500">{fmtDate(p.date)} {p.note ? `• ${p.note}` : ''}</div>
-                  </div>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      void removePayment(invoice.id!, p.id)
-                      toast('Payment hata diya')
-                    }}
-                  >
-                    ✕
-                  </button>
+        <section ref={paymentHistoryRef} tabIndex={-1} aria-labelledby="payment-history-heading" className="card mt-3 scroll-mt-24">
+          <h2 id="payment-history-heading" className="text-[13px] font-bold text-slate-700">
+            {isPurchase ? 'Supplier ko kiye payment' : 'Payment history'}
+          </h2>
+          {!invoice.payments.length ? (
+            <p className="mt-2 text-sm text-slate-500">Abhi koi payment record nahi hai.</p>
+          ) : null}
+          <div className="mt-1">
+            {invoice.payments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between border-b border-slate-100 py-2 text-[13px] last:border-0">
+                <div>
+                  <div className="font-semibold text-slate-800">{money(p.amount)} • {p.mode}</div>
+                  <div className="text-[11px] text-slate-500">{fmtDate(p.date)} {p.note ? `• ${p.note}` : ''}</div>
                 </div>
-              ))}
-            </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    void removePayment(invoice.id!, p.id)
+                    toast('Payment hata diya')
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
-        ) : null}
+        </section>
 
         <div className="mt-3 flex gap-2">
           <button className="btn btn-outline flex-1" onClick={() => onEdit(invoice)}>
