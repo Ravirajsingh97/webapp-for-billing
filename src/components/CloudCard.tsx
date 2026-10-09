@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  CLOUD_CHANGE_EVENT,
   autoSyncEnabled,
   getCloudConfig,
   isCloudConfigured,
@@ -98,6 +99,11 @@ export function CloudCard() {
     setSignedIn(isSignedIn())
     setEmail(signedInEmail())
     setConfigured(isCloudConfigured())
+    setAuto(autoSyncEnabled())
+    const changed = () => { setSignedIn(isSignedIn()); setEmail(signedInEmail()); setConfigured(isCloudConfigured()); setAuto(autoSyncEnabled()) }
+    window.addEventListener(CLOUD_CHANGE_EVENT, changed)
+    window.addEventListener('storage', changed)
+    return () => { window.removeEventListener(CLOUD_CHANGE_EVENT, changed); window.removeEventListener('storage', changed) }
   }, [tick])
 
   const doSync = async (all: boolean) => {
@@ -211,7 +217,7 @@ export function CloudCard() {
         onDone={() => {
           setAuthOpen(false)
           setTick((t) => t + 1)
-          void doSync(true)
+          // App's scheduler respects auto-sync preference; manual buttons remain available.
         }}
       />
 

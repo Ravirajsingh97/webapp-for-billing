@@ -1,3 +1,4 @@
+import { requireUnlocked, requireOwnerIfConfigured } from './auth'
 import { initializeInventory, reconcileInventory } from './inventory'
 import type { Invoice, Item, PaymentEntry } from './types'
 import { SYNC_TABLES as TABLE_ORDER, detachMissingReferences, normalizeTombstone, naturalKey, recordIdentity, tombstoneKey, type SyncTableName, type Tombstone } from './syncIdentity'
@@ -25,6 +26,9 @@ import {
   freshToken,
   getSession,
   isCloudConfigured,
+  autoSyncEnabled,
+  getCloudConfig,
+  cloudContext,
   remoteGetRegistry,
   CloudError,
   remoteGetCompany,
@@ -129,7 +133,7 @@ export async function mergeSnapshot(dbx: ShowroomDB, remoteJson: string): Promis
       const byIdentity = new Map(localRows.map((r) => [recordIdentity(name, r), r]))
       const byNatural = new Map(localRows.map((r) => [naturalKey(name, r), r]))
       const usedIds = new Set([...localRows.map(primary), ...deletedIds, ...(referencedIds.get(name) ?? [])])
-      const maxId = Math.max(0, ...[...usedIds].map((id) => Number(id) || 0), ...remoteRows.map((r) => Number(r.id) || 0))
+      const maxId = [...usedIds, ...remoteRows.map(r => r.id)].reduce<number>((max, id) => Math.max(max, Number(id) || 0), 0)
       let nextId = maxId + 1
       const idMap = new Map<number, number | undefined>()
       remaps.set(name, idMap)
@@ -235,13 +239,25 @@ export async function mergeSnapshot(dbx: ShowroomDB, remoteJson: string): Promis
   })
 }
 
+const bindingKey = (companyId: string) => `showroom_cloud_owner_${companyId}`
+const accountIdentity = (uid: string) => JSON.stringify([getCloudConfig()?.projectId, uid])
+function allowedAccount(companyId: string, uid: string): boolean {
+  const binding = store.get('local', bindingKey(companyId))
+  return !binding || binding === accountIdentity(uid)
+}
+function assertAccount(companyId: string, uid: string): void {
+  if (!allowedAccount(companyId, uid)) throw new CloudError('COMPANY_ACCOUNT_MISMATCH', 'Ye company doosre cloud account/project se linked hai. Original account use karein ya alag company/browser profile banayein.')
+}
+
 /** Company registry (kaun-kaun si companies hain) ka merge */
-async function syncRegistry(uid: string, attempt = 0): Promise<number> {
-  const local = listCompanies()
+async function syncRegistry(uid: string, attempt = 0, expected = cloudContext()): Promise<number> {
+  const local = listCompanies().filter(c => allowedAccount(c.id, uid))
   const registry = await remoteGetRegistry(uid)
+  if (cloudContext() !== expected) throw new CloudError('AUTH_CHANGED', 'Cloud account badal gaya')
   const remote = registry?.companies ?? []
 
   for (const rc of remote) {
+    assertAccount(rc.id, uid)
     const mine = local.find((c) => c.id === rc.id)
     if (!mine) {
       // remote company local me nahi hai -> add karo (payload baad me pull hoga)
@@ -258,11 +274,11 @@ async function syncRegistry(uid: string, attempt = 0): Promise<number> {
     }
   }
 
-  const merged: RemoteCompany[] = listCompanies().map((c) => ({ id: c.id, name: c.name, createdAt: c.createdAt }))
+  const merged: RemoteCompany[] = listCompanies().filter(c => allowedAccount(c.id, uid)).map((c) => ({ id: c.id, name: c.name, createdAt: c.createdAt }))
   try {
-    await remoteSetCompanies(uid, merged, registry ? registry.updateTime : null)
+    if (!registry || JSON.stringify(merged) !== JSON.stringify(remote)) await remoteSetCompanies(uid, merged, registry ? registry.updateTime : null)
   } catch (e) {
-    if (e instanceof CloudError && e.code === 'SYNC_CONFLICT' && attempt < 2) return syncRegistry(uid, attempt + 1)
+    if (e instanceof CloudError && e.code === 'SYNC_CONFLICT' && attempt < 2) return syncRegistry(uid, attempt + 1, expected)
     throw e
   }
   return merged.length
@@ -274,34 +290,47 @@ export interface SyncProgress {
 
 /** Saari companies ka sync (default: sirf active company) */
 async function runSync(
-  opts: { all?: boolean; onProgress?: SyncProgress } = {},
+  opts: { all?: boolean; automatic?: boolean; onProgress?: SyncProgress } = {},
 ): Promise<SyncResult> {
+  await requireUnlocked()
+  if (opts.all) await requireOwnerIfConfigured()
+  if (opts.automatic && !autoSyncEnabled()) throw new CloudError('AUTO_SYNC_DISABLED', 'Auto-sync band hai')
   if (!isCloudConfigured()) throw new Error('Cloud setup nahi hua — Settings → Cloud account me config daalein')
   const session = getSession()
+  const expected = cloudContext()
   if (!session) throw new Error('Pehle login karein')
+  assertAccount(activeCompanyId(), session.uid)
   await freshToken() // token taaza karo (expire ho raha ho to refresh)
 
   await syncRegistry(session.uid)
 
   const activeId = activeCompanyId()
   const all = listCompanies()
-  const targets = opts.all ? all : all.filter((c) => c.id === activeId)
+  const targets = opts.all ? all.filter(c => allowedAccount(c.id, session.uid)) : all.filter((c) => c.id === activeId)
 
   const total: MergeStats = { added: 0, updated: 0, skipped: 0 }
   let pulled = false
 
   for (let i = 0; i < targets.length; i++) {
     const company = targets[i]
+    assertAccount(company.id, session.uid)
     opts.onProgress?.({ companyId: company.id, companyName: company.name, index: i + 1, total: targets.length })
 
     const dbx = dbFor(company.id)
     await dbx.open()
+    await requireUnlocked(dbx, company.id)
+    if (cloudContext() !== expected) throw new CloudError('AUTH_CHANGED', 'Cloud account badal gaya')
+    store.set('local', bindingKey(company.id), accountIdentity(session.uid))
 
     // Compare-and-set publication prevents two devices replacing each other's snapshots.
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (getSession()?.uid !== session.uid) throw new Error('Cloud account badal gaya; dobara sync karein')
+      await requireUnlocked(dbx, company.id)
+      if (opts.automatic && !autoSyncEnabled()) throw new CloudError('AUTO_SYNC_DISABLED', 'Auto-sync band hai')
+      if (cloudContext() !== expected) throw new Error('Cloud account badal gaya; dobara sync karein')
       const remote = await remoteGetCompany(session.uid, company.id)
-      if (getSession()?.uid !== session.uid) throw new Error('Cloud account badal gaya; dobara sync karein')
+      await requireUnlocked(dbx, company.id)
+      if (opts.automatic && !autoSyncEnabled()) throw new CloudError('AUTO_SYNC_DISABLED', 'Auto-sync band hai')
+      if (cloudContext() !== expected) throw new Error('Cloud account badal gaya; dobara sync karein')
       if (remote) {
         const stats = await mergeSnapshot(dbx, remote.payload)
         total.added += stats.added
@@ -310,7 +339,10 @@ async function runSync(
         pulled = pulled || stats.added + stats.updated > 0
       }
       try {
-        await remoteSetCompany(session.uid, company.id, await buildSnapshot(dbx), remote ? remote.updateTime : null)
+        const payload = await buildSnapshot(dbx)
+        if (cloudContext() !== expected) throw new CloudError('AUTH_CHANGED', 'Cloud account badal gaya')
+        if (opts.automatic && !autoSyncEnabled()) throw new CloudError('AUTO_SYNC_DISABLED', 'Auto-sync band hai')
+        if (!remote || remote.payload !== payload) await remoteSetCompany(session.uid, company.id, payload, remote ? remote.updateTime : null)
         break
       } catch (e) {
         if (!(e instanceof CloudError) || e.code !== 'SYNC_CONFLICT' || attempt === 2) throw e
@@ -330,15 +362,25 @@ async function runSync(
 }
 
 let syncQueue: Promise<unknown> = Promise.resolve()
-export function syncNow(opts: { all?: boolean; onProgress?: SyncProgress } = {}): Promise<SyncResult> {
-  const next = syncQueue.then(() => runSync(opts))
+const pendingSyncs = new Map<string, Promise<SyncResult>>()
+export function syncNow(opts: { all?: boolean; automatic?: boolean; onProgress?: SyncProgress } = {}): Promise<SyncResult> {
+  const expected = cloudContext(), companyId = activeCompanyId()
+  const key = JSON.stringify([expected, companyId, !!opts.all, !!opts.automatic])
+  const existing = pendingSyncs.get(key)
+  if (existing) return existing
+  const next = syncQueue.then(() => {
+    if (cloudContext() !== expected || activeCompanyId() !== companyId) throw new CloudError('AUTH_CHANGED', 'Queued sync ka account/company badal gaya; dobara try karein')
+    return runSync(opts)
+  })
+  pendingSyncs.set(key, next)
   syncQueue = next.catch(() => undefined)
+  void next.finally(() => { if (pendingSyncs.get(key) === next) pendingSyncs.delete(key) }).catch(() => undefined)
   return next
 }
 
 /** Login ke turant baad: registry + saari companies ka data neeche kheencho */
 export async function syncAfterLogin(): Promise<SyncResult> {
-  return syncNow({ all: true })
+  return syncNow({ all: true, automatic: true })
 }
 
 /**

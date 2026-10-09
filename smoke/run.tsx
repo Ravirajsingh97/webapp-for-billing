@@ -791,6 +791,7 @@ async function main() {
     check('sync: merge stats batate hain kitna juda', res2.added >= 3, `added=${res2.added} updated=${res2.updated}`)
 
     const activeCloudPath = `showroomUsers/uid1/companies/${(await import('../src/lib/company')).activeCompanyId()}`
+    await db.appSettings.put({ key: 'race-test', value: 'first', updatedAt: Date.now() })
     const beforeRace = conflicts
     beforePatch = (path) => {
       if (path !== activeCloudPath) return
@@ -807,12 +808,20 @@ async function main() {
     let creationConflict = false
     try { await cloud.remoteSetCompany('uid1', (await import('../src/lib/company')).activeCompanyId(), await sync.buildSnapshot(), null) } catch (e) { creationConflict = e instanceof cloud.CloudError && e.code === 'SYNC_CONFLICT' }
     check('sync: missing-document precondition cannot replace existing snapshot', creationConflict)
+    await db.appSettings.put({ key: 'race-test', value: 'second', updatedAt: Date.now() })
     const attemptsBefore = conflicts
     beforePatch = (path) => { if (path === activeCloudPath) revisions.set(path, `revision-${++revision}`) }
     let exhausted = false
     try { await sync.syncNow() } catch (e) { exhausted = e instanceof cloud.CloudError && e.code === 'SYNC_CONFLICT' }
     beforePatch = undefined
     check('sync: sustained conflicts stop after three publication attempts', exhausted && conflicts === attemptsBefore + 3)
+
+    await sync.syncNow() // Finish the pending local change after conflict fixture is removed.
+    const writesBeforeNoop = fetchCalls.filter(url => url.includes('currentDocument.')).length
+    const sameSyncA = sync.syncNow(), sameSyncB = sync.syncNow()
+    await Promise.all([sameSyncA, sameSyncB])
+    check('sync: equivalent calls share one in-flight operation', sameSyncA === sameSyncB)
+    check('sync: unchanged snapshot and registry skip publication', fetchCalls.filter(url => url.includes('currentDocument.')).length === writesBeforeNoop)
 
     const beforeAuto = fetchCalls.length
     cloud.setAutoSync(true)

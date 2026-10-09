@@ -1,3 +1,4 @@
+import { DATA_CHANGE_EVENT } from './autoSync'
 import { newSyncId, type Tombstone } from './syncIdentity'
 import Dexie, { type Table } from 'dexie'
 import type { User } from './auth'
@@ -49,6 +50,13 @@ export class ShowroomDB extends Dexie {
       users: '++id, name, role, createdAt',
     })
     this.version(4).stores({ tombstones: 'key, table, deletedAt' })
+    // Emit after successful writes; the scheduler debounces bursts of local edits.
+    const changed = () => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(DATA_CHANGE_EVENT)) }
+    for (const name of ['business', 'items', 'parties', 'invoices', 'payments', 'expenses', 'docSettings', 'appSettings', 'tombstones']) {
+      this.table(name).hook('creating', function () { this.onsuccess = changed })
+      this.table(name).hook('updating', function () { this.onsuccess = changed })
+      this.table(name).hook('deleting', function () { this.onsuccess = changed })
+    }
     // Preserve supplied identities on restore/sync; assign new identities to new local records.
     for (const name of ['items', 'parties', 'invoices', 'payments', 'expenses']) {
       this.table(name).hook('creating', (_key, row) => {

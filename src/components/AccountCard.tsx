@@ -241,6 +241,8 @@ function AddUserSheet({
           <label className="text-[12px] font-semibold text-slate-600">PIN</label>
           <input
             className="input num"
+            type="password"
+            autoComplete="new-password"
             inputMode="numeric"
             maxLength={6}
             placeholder="4-6 ank"
@@ -252,6 +254,8 @@ function AddUserSheet({
           <label className="text-[12px] font-semibold text-slate-600">PIN dobara</label>
           <input
             className="input num"
+            type="password"
+            autoComplete="new-password"
             inputMode="numeric"
             maxLength={6}
             placeholder="wahi PIN"
@@ -263,7 +267,7 @@ function AddUserSheet({
 
       {err ? <div className="mt-2 text-[12px] font-semibold text-red-600">{err}</div> : null}
       <div className="mt-3 text-[11px] leading-relaxed text-slate-500">
-        Users aur PIN sirf aapke phone me rehte hain. PIN bhool jayein to owner login screen se naya bana sakta hai.
+        Users aur PIN sirf aapke phone me rehte hain. PIN bhool jayein to logged-in owner Settings se naya bana sakta hai.
       </div>
     </Sheet>
   )
@@ -312,7 +316,9 @@ function PinSheet({
     >
       <input
         className="input num"
-        inputMode="numeric"
+        type="password"
+            autoComplete="new-password"
+            inputMode="numeric"
         maxLength={6}
         placeholder="Naya PIN"
         value={pin}

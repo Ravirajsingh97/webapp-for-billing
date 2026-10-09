@@ -62,11 +62,7 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
   try {
     await db.transaction(
       'rw',
-      db.items,
-      db.invoices,
-      db.docSettings,
-      db.parties,
-      db.payments,
+      [db.items, db.invoices, db.docSettings, db.parties, db.payments, db.users],
       async () => {
         // ---------- Items ----------
         const idA = await repo.upsertItem(baseItem)
@@ -226,7 +222,7 @@ export async function runSelfTest(): Promise<SelfTestResult[]> {
 
   // ---------- Expenses (alag transaction) ----------
   try {
-    await db.transaction('rw', db.expenses, async () => {
+    await db.transaction('rw', db.expenses, db.users, async () => {
       const expId = await repo.upsertExpense({
         date: todayISO(),
         category: 'Rent',

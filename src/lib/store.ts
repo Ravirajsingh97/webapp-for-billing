@@ -1,64 +1,30 @@
-/**
- * Safe key-value storage.
- *
- * Kuch jagah (private mode, file://, WebView, iframe, test runners) browser
- * ka localStorage/sessionStorage block ya missing hota hai. Aise me hum
- * in-memory fallback use karte hain — app chalti rehti hai, bas wo setting
- * us session tak hi rehti hai.
- */
-
+/** Storage fallback preserves local writes/removals when browser storage is unavailable. */
 type Kind = 'local' | 'session'
-
-const memory: Record<Kind, Map<string, string>> = {
-  local: new Map<string, string>(),
-  session: new Map<string, string>(),
-}
-
+const memory: Record<Kind, Map<string, string | null>> = { local: new Map(), session: new Map() }
 function backend(kind: Kind): Storage | null {
-  try {
-    const s = kind === 'local' ? globalThis.localStorage : globalThis.sessionStorage
-    if (!s) return null
-    const probe = '__showroom_probe__'
-    s.setItem(probe, '1')
-    s.removeItem(probe)
-    return s
-  } catch {
-    return null
-  }
+  try { return (kind === 'local' ? globalThis.localStorage : globalThis.sessionStorage) ?? null }
+  catch { return null }
 }
-
 export const store = {
   get(kind: Kind, key: string): string | null {
-    try {
-      const b = backend(kind)
-      if (b) return b.getItem(key)
-    } catch {
-      /* fallback */
-    }
-    return memory[kind].get(key) ?? null
+    // A failed write/removal must take precedence over an older persistent value.
+    if (memory[kind].has(key)) return memory[kind].get(key) ?? null
+    try { return backend(kind)?.getItem(key) ?? null }
+    catch { return null }
   },
   set(kind: Kind, key: string, value: string): void {
     try {
-      const b = backend(kind)
-      if (b) {
-        b.setItem(key, value)
-        return
-      }
-    } catch {
-      /* fallback */
-    }
+      const storage = backend(kind)
+      if (storage) { storage.setItem(key, value); memory[kind].delete(key); return }
+    } catch { /* retain the new value below */ }
     memory[kind].set(key, value)
   },
   remove(kind: Kind, key: string): void {
+    // Retain a removal marker if storage still contains an inaccessible old session.
+    memory[kind].set(key, null)
     try {
-      const b = backend(kind)
-      if (b) {
-        b.removeItem(key)
-        return
-      }
-    } catch {
-      /* fallback */
-    }
-    memory[kind].delete(key)
+      const storage = backend(kind)
+      if (storage) { storage.removeItem(key); memory[kind].delete(key) }
+    } catch { /* keep removal marker */ }
   },
 }

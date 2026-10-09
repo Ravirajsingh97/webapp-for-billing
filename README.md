@@ -1,7 +1,7 @@
 # Showroom Manager — Billing Edition (Web App / PWA)
 
 MyBillBook जैसा **showroom billing app** — GST invoice, estimate, barcode billing, stock aur reports.
-पूरा offline चलता है, data आपके phone/browser में ही रहता है (कोई login नहीं, कोई server नहीं)।
+Offline चलता है; data आपके phone/browser में रहता है। Staff PIN login और Firebase cloud sync optional हैं।
 
 यह repository अपने आप में पूरा web app है — किसी दूसरे folder में जाने की ज़रूरत नहीं। Phone में "Add to Home screen" करके इसे
 native app की तरह install किया जा सकता है।
@@ -189,8 +189,8 @@ Setup **ek baar** karna padta hai (free Firebase project, ~5 min) — app ke and
 5. **Project settings → Your apps → Web** → `firebaseConfig` copy karke app me paste karein
 6. **Authentication → Settings → Authorized domains** me apni site ka domain add karein
 
-Uske baad **Login / Sign up** — email+password ya **Google se login** (browser me). Login ke baad sync khud
-chalta hai (app khulte hi + har 3 minute me), aur "Saari companies sync" se ek hi baar me sab companies sync ho jati hain.
+Uske baad **Login / Sign up** — email+password ya **Google se login** (browser me). Auto-sync on ho to login ke baad sync khud
+chalta hai (local changes ke baad debounce + har 3 minute me), aur "Saari companies sync" se ek hi baar me sab companies sync ho jati hain.
 
 **Sync kaise kaam karta hai**
 
@@ -207,9 +207,9 @@ Technical: `src/lib/cloud.ts` (Firebase Auth + Firestore REST, koi SDK nahi — 
 ### 🔐 Users & login (offline)
 
 - Settings → **👤 Users & login** → naya user banayein (naam, role, 4-6 ank ka PIN).
-- **Jab tak koi user na bane, app bina login khulti hai** — user banate hi agla khulne par PIN maangta hai.
+- **Jab tak koi user na bane, app bina login khulti hai** — pehla user banate hi current tab bhi lock hota hai. Disabled/malformed users login ko automatically band nahi karte.
 - Owner aur staff ka PIN sirf **logged-in owner** Settings se badal sakta hai. Login screen se PIN reset nahi hota. Pehla user hamesha owner hota hai; aakhri active owner ko disable/delete nahi kar sakte.
-- PIN ka hash phone me hi rehta hai (SHA-256). Login/session tab band hone par khatam.
+- PIN ka salted PBKDF2-SHA256 hash (210,000 iterations) phone me rehta hai. Purane hashes successful login par migrate hote hain. Secure Web Crypto unavailable ho to naya PIN save nahi hota. Session tab band hone par ya 8 ghante baad expire hota hai; PIN changes existing sessions revoke karte hain. Paanch wrong attempts ke baad ek minute lockout hota hai.
 
 ### 🏢 Company / Firm (multi-company)
 
@@ -318,3 +318,12 @@ A converted delivery challan and its tax invoice represent one delivery: the act
 Home, More and aging use the party ledger, including opening balances, credit notes and standalone receipts/payments. Opening balances have no original transaction date and appear in the 90+ day bucket. Today's cash/UPI totals use payment dates and subtract outgoing payments. Discounts allocate exact paise; printed HSN summaries separate GST rates and purchase documents do not show the shop's collection QR.
 
 Cloud snapshot publication checks the Firestore server revision and retries a conflicting pull/merge/upload up to three times. A continuing conflict displays an error and can be retried. Regression coverage includes these conflicts using a synthetic Firestore server; real Firebase permissions/OAuth and physical printing still require deployment checks.
+
+## Login and cloud security / automation
+
+- Login check/storage failure keeps the app locked. Onboarding is behind the gate. User mutations recheck open tabs; focus and a 30-second check also enforce session expiry. PIN reset, user administration, Settings/cloud controls and backup export/restore/reset require an owner when users are configured. Company switching remains available while locked, but company creation/rename controls require owner access.
+- Local PIN login protects ordinary app use on a shared device. It does **not** encrypt IndexedDB, prevent browser developer tools/storage tampering, or establish server-side staff roles. Firebase Auth and the documented UID-based Firestore rules provide cloud account isolation. Keep those rules deployed; never use public read/write rules for this app.
+- A local company becomes bound to the Firebase project/account used for sync. Another project/account cannot merge into that company. Use the original account or a separate company/browser profile. Changing Firebase configuration clears the old cloud session. Late login/refresh responses after logout are discarded, and revoked refresh tokens clear the session.
+- Auto-sync off suppresses automatic startup/login/write-triggered work; explicit Sync buttons still work. Visible online tabs sync after a two-second write debounce (continuous writes flush within ten seconds), on reconnection/resume, and every three minutes after completion. Failures back off from five seconds up to five minutes. Hiding a tab or going offline pauses new work; an already dispatched request may finish.
+- Sync calls for the same account/company/scope share one pending operation. Provider requests have a 30-second timeout including response-body reading. Token refresh uses one shared request. Unchanged registry/snapshots skip publication; large snapshot chunks transfer in batches of four and the manifest is published only after all uploads succeed.
+- Sync still reads whole company snapshots and retains old chunk generations/deletion markers. Very large stores need a separate incremental-sync/retention design; this change does not remove historical cloud data.

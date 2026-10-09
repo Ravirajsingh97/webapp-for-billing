@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/db'
 import { activeCompany, activeCompanyId, createCompany, listCompanies, switchCompany, renameCompany } from '../lib/company'
-import { tryLogin, type User } from '../lib/auth'
+import { tryLogin, currentUser, requireOwnerIfConfigured, type User } from '../lib/auth'
 import { Sheet, toast } from '../components/ui'
 
 const initials = (name: string) =>
@@ -64,24 +64,18 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
 
   const actives = (users ?? []).filter((u) => u.active && u.pinHash)
 
-  // agar sab users hat gaye to login ki zarurat nahi
-  useEffect(() => {
-    if (users.length > 0 && actives.length === 0) onLoggedIn()
-  }, [users, actives.length, onLoggedIn])
-
+  const submitting = useRef(false)
   const submit = async (value: string) => {
-    if (!selected?.id) return
+    if (!selected?.id || submitting.current) return
+    submitting.current = true
     setBusy(true)
-    const ok = await tryLogin(selected.id, value)
-    setBusy(false)
-    if (ok) {
-      toast(`Namaste, ${selected.name}! 🙏`, 'success')
-      onLoggedIn()
-    } else {
-      setError('PIN galat hai — dobara koshish karein')
-      setPin('')
-      setTimeout(() => setError(''), 2500)
-    }
+    try {
+      if (await tryLogin(selected.id, value)) {
+        toast(`Namaste, ${selected.name}! 🙏`, 'success')
+        onLoggedIn()
+      } else { setError('PIN galat hai — dobara koshish karein'); setPin('') }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Login check nahi ho paya'); setPin('') }
+    finally { submitting.current = false; setBusy(false) }
   }
 
   const press = (d: string) => {
@@ -192,13 +186,15 @@ export function CompanySheet({
   onClose: () => void
   onChanged?: () => void
 }) {
+  const canManage = useLiveQuery(async () => await db.users.count() === 0 || (await currentUser())?.role === 'OWNER', [open], false)
   const [newName, setNewName] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const companies = open ? listCompanies() : []
   const activeId = activeCompanyId()
 
-  const create = () => {
+  const create = async () => {
+    try { await requireOwnerIfConfigured() } catch (e) { toast(e instanceof Error ? e.message : 'Owner login chahiye', 'error'); return }
     const name = newName.trim()
     if (!name) {
       toast('Company ka naam likhein', 'error')
@@ -232,7 +228,9 @@ export function CompanySheet({
                 />
                 <button
                   className="btn btn-ghost btn-sm"
+                  disabled={!canManage}
                   onClick={() => {
+                    if (!canManage) return
                     renameCompany(c.id, editName)
                     setEditing(null)
                     onChanged?.()
@@ -250,6 +248,7 @@ export function CompanySheet({
                     setEditing(c.id)
                     setEditName(c.name)
                   }}
+                  disabled={!canManage}
                   aria-label="Naam badlein"
                 >
                   ✏️
@@ -279,7 +278,7 @@ export function CompanySheet({
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
-          <button className="btn btn-primary" onClick={create}>
+          <button className="btn btn-primary" disabled={!canManage} onClick={() => void create()}>
             Banayein
           </button>
         </div>

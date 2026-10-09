@@ -4,7 +4,9 @@ import { newInvoice } from './lib/repo'
 import { fmtDate, todayISO } from './lib/format'
 import type { Business, DocType, Invoice } from './lib/types'
 import { Toaster, toast } from './components/ui'
-import { checkLogin } from './lib/auth'
+import { checkLogin, AUTH_CHANGE_EVENT } from './lib/auth'
+import { liveQuery } from 'dexie'
+import { startAutoSync } from './lib/autoSync'
 import { autoSyncEnabled, isCloudConfigured, isSignedIn, CLOUD_CHANGE_EVENT } from './lib/cloud'
 import { syncNow } from './lib/sync'
 import { LoginScreen } from './screens/Auth'
@@ -53,23 +55,27 @@ export default function App() {
   const [installEvt, setInstallEvt] = useState<{ prompt: () => Promise<void> } | null>(null)
   const [seeded, setSeeded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [gateError, setGateError] = useState<string | null>(null)
   // login gate: 'off' = koi user nahi, 'login' = PIN chahiye, 'ok' = andar
   const [cloudRevision, setCloudRevision] = useState(0)
   useEffect(() => {
     const changed = () => setCloudRevision((n) => n + 1)
     window.addEventListener(CLOUD_CHANGE_EVENT, changed)
-    window.addEventListener('storage', changed)
-    return () => { window.removeEventListener(CLOUD_CHANGE_EVENT, changed); window.removeEventListener('storage', changed) }
+    const stored = (event: StorageEvent) => { if (!event.key || ['showroom_cloud_config', 'showroom_cloud_session', 'showroom_cloud_autosync'].includes(event.key)) changed() }
+    window.addEventListener('storage', stored)
+    return () => { window.removeEventListener(CLOUD_CHANGE_EVENT, changed); window.removeEventListener('storage', stored) }
   }, [])
   const [gate, setGate] = useState<'loading' | 'off' | 'login' | 'ok'>('loading')
 
   const refreshGate = useCallback(async () => {
     try {
       const g = await checkLogin()
-      setGate(g === 'off' ? 'off' : g === 'ok' ? 'ok' : 'login')
+      setGate(g)
+      setGateError(null)
     } catch (e) {
       console.error('[showroom] login check failed:', e)
-      setGate('off')
+      setGate('login')
+      setGateError('Login verify nahi ho paya. Dobara load karein.')
     }
   }, [])
 
@@ -91,29 +97,29 @@ export default function App() {
     void refreshGate()
   }, [loadBusiness, refreshGate])
 
-  // Cloud sync: app khulte hi + har 3 minute me (agar login hai aur auto-sync on hai)
+  useEffect(() => {
+    const subscription = liveQuery(() => checkLogin()).subscribe({
+      next: g => { setGate(g); setGateError(null) },
+      error: () => { setGate('login'); setGateError('Login verify nahi ho paya. Dobara load karein.') },
+    })
+    const changed = () => { setGate('loading'); void refreshGate() }
+    const onFocus = () => void refreshGate()
+    window.addEventListener(AUTH_CHANGE_EVENT, changed)
+    window.addEventListener('focus', onFocus)
+    const timer = setInterval(onFocus, 30_000)
+    return () => { subscription.unsubscribe(); window.removeEventListener(AUTH_CHANGE_EVENT, changed); window.removeEventListener('focus', onFocus); clearInterval(timer) }
+  }, [refreshGate])
+
   useEffect(() => {
     if (gate !== 'ok' && gate !== 'off') return
     if (!isCloudConfigured() || !isSignedIn() || !autoSyncEnabled()) return
-    let alive = true
-    const run = async () => {
-      if (!alive || !isSignedIn() || !autoSyncEnabled()) return
-      try {
-        const r = await syncNow()
-        if (alive && r.added + r.updated > 0) {
-          await loadBusiness()
-          toast(`☁️ Cloud se ${r.added} nayi, ${r.updated} update aayi`, 'success')
-        }
-      } catch (e) {
-        console.warn('[showroom] auto sync fail:', e)
-      }
-    }
-    void run()
-    const t = setInterval(() => void run(), 180_000)
-    return () => {
-      alive = false
-      clearInterval(t)
-    }
+    return startAutoSync({
+      enabled: () => isSignedIn() && autoSyncEnabled(),
+      run: async () => {
+        const r = await syncNow({ automatic: true })
+        if (r.added + r.updated > 0) await loadBusiness()
+      },
+    })
   }, [gate, cloudRevision, loadBusiness])
 
   useEffect(() => {
@@ -183,6 +189,8 @@ export default function App() {
     )
   }
 
+  if (gateError) return <BootProblem title="Login verify nahi ho paya" message={gateError} detail="App locked hai; reload karke dobara try karein." url={window.location.href} />
+
   if (!business || onboarded === null) {
     return (
       <div className="app-shell items-center justify-center">
@@ -191,19 +199,10 @@ export default function App() {
     )
   }
 
-  if (!onboarded) {
-    return (
-      <>
-        <Onboarding business={business} onDone={() => void loadBusiness()} />
-        <Toaster />
-      </>
-    )
-  }
-
   if (gate === 'login') {
     return (
       <>
-        <LoginScreen onLoggedIn={() => setGate('ok')} />
+        <LoginScreen onLoggedIn={() => void refreshGate()} />
         <Toaster />
       </>
     )
@@ -214,6 +213,15 @@ export default function App() {
       <div className="app-shell items-center justify-center">
         <div className="mt-24 text-center text-sm text-slate-500">Login taiyaar ho raha hai…</div>
       </div>
+    )
+  }
+
+  if (!onboarded) {
+    return (
+      <>
+        <Onboarding business={business} onDone={() => void loadBusiness()} />
+        <Toaster />
+      </>
     )
   }
 

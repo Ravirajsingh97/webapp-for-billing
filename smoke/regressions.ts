@@ -11,6 +11,7 @@ import { createRoot } from 'react-dom/client'
 import { POSScreen } from '../src/screens/POS'
 import { suggestPurchaseLines } from '../src/lib/ocr'
 import { runSafetyRegressions } from './safety'
+import { runSecurityRegressions } from './security'
 import { BillingScreen } from '../src/screens/Billing'
 
 // Fixtures model complete cloud snapshots; individual tests override relevant tables.
@@ -245,6 +246,7 @@ export async function runRegressions(check: Check) {
   check('regression: CSV delimiters round trip', parseCsvText(csvEscape(special))[0][0] === special)
   await testChunkedCloud(check)
   await runSafetyRegressions(check)
+  await runSecurityRegressions(check)
 }
 
 async function testChunkedCloud(check: Check) {

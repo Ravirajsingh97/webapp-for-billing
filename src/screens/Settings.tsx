@@ -1,3 +1,4 @@
+import { currentUser, requireOwnerIfConfigured } from '../lib/auth'
 import { todayISO } from '../lib/format'
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -24,6 +25,7 @@ export function SettingsScreen({
   installPrompt?: { prompt: () => Promise<void> } | null
   onInstall?: () => void
 }) {
+  const permission = useLiveQuery(async () => await db.users.count() === 0 || (await currentUser())?.role === 'OWNER', [], false)
   const [form, setForm] = useState<Business>(business)
   const [savedTick, setSavedTick] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -62,19 +64,22 @@ export function SettingsScreen({
   useEffect(() => setForm(business), [business])
 
   const save = async () => {
-    if (!form.name.trim()) {
-      toast('Dukaan ka naam likhein', 'error')
-      return
-    }
-    const existing = (await db.business.toCollection().first())?.id
-    const stateName = STATES.find((s) => s.code === form.stateCode)?.name ?? ''
-    const rec = { ...form, isPlaceholder: false, updatedAt: Date.now(), stateName }
-    if (existing) await db.business.update(existing, rec)
-    else await db.business.add(rec)
-    setSavedTick(true)
-    setTimeout(() => setSavedTick(false), 1500)
-    onBusinessChange()
-    toast('Shop details save ho gayi', 'success')
+    try {
+      await requireOwnerIfConfigured()
+      if (!form.name.trim()) {
+        toast('Dukaan ka naam likhein', 'error')
+        return
+      }
+      const existing = (await db.business.toCollection().first())?.id
+      const stateName = STATES.find((s) => s.code === form.stateCode)?.name ?? ''
+      const rec = { ...form, isPlaceholder: false, updatedAt: Date.now(), stateName }
+      if (existing) await db.business.update(existing, rec)
+      else await db.business.add(rec)
+      setSavedTick(true)
+      setTimeout(() => setSavedTick(false), 1500)
+      onBusinessChange()
+      toast('Shop details save ho gayi', 'success')
+    } catch (e) { toast(e instanceof Error ? e.message : 'Shop details save nahi hui', 'error') }
   }
 
   const uploadImage = async (file: File, key: 'logoDataUrl' | 'signatureDataUrl') => {
@@ -85,6 +90,8 @@ export function SettingsScreen({
     const dataUrl = await readFileAsDataUrl(file)
     setForm((f) => ({ ...f, [key]: dataUrl }))
   }
+
+  if (!permission) return <div className="screen-content p-3"><p className="card">Settings, cloud account aur backups ke liye owner login chahiye.</p><AccountCard /></div>
 
   return (
     <div className="screen-content form-page flex-1 px-3 pb-24 pt-3">
@@ -404,9 +411,11 @@ export function SettingsScreen({
           <button
             className="btn btn-primary btn-block"
             onClick={async () => {
-              const json = await exportBackup()
-              download(`showroom-backup-${new Date().toISOString().slice(0, 10)}.json`, json, 'application/json')
-              toast('Backup download ho gaya', 'success')
+              try {
+                const json = await exportBackup()
+                download(`showroom-backup-${new Date().toISOString().slice(0, 10)}.json`, json, 'application/json')
+                toast('Backup download ho gaya', 'success')
+              } catch (e) { toast(e instanceof Error ? e.message : 'Backup nahi bana', 'error') }
             }}
           >
             ⬇ Backup download karein
@@ -447,11 +456,13 @@ export function SettingsScreen({
         confirmLabel="Sab delete karein"
         onCancel={() => setConfirmReset(false)}
         onConfirm={async () => {
-          await wipeAllData()
-          await seedDatabase()
-          await onBusinessChange()
-          setConfirmReset(false)
-          toast('Data reset ho gaya', 'success')
+          try {
+            await wipeAllData()
+            await seedDatabase()
+            await onBusinessChange()
+            setConfirmReset(false)
+            toast('Data reset ho gaya', 'success')
+          } catch (e) { toast(e instanceof Error ? e.message : 'Reset nahi hua', 'error') }
         }}
       />
     </div>
@@ -478,9 +489,12 @@ function DocSettingSheet({ setting, onClose }: { setting: DocSetting | null; onC
         <button
           className="btn btn-primary btn-block"
           onClick={async () => {
-            await db.docSettings.put({ ...draft, updatedAt: Date.now() })
-            toast('Number series save ho gayi', 'success')
-            onClose()
+            try {
+              await requireOwnerIfConfigured()
+              await db.docSettings.put({ ...draft, updatedAt: Date.now() })
+              toast('Number series save ho gayi', 'success')
+              onClose()
+            } catch (e) { toast(e instanceof Error ? e.message : 'Number series save nahi hui', 'error') }
           }}
         >
           💾 Save

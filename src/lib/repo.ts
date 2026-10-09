@@ -1,3 +1,4 @@
+import { requireOwnerIfConfigured, requireUnlocked } from './auth'
 import { initializeInventory, reconcileInventory, roundStock } from './inventory'
 import { mergeSnapshot } from './sync'
 import type { Table } from 'dexie'
@@ -57,10 +58,12 @@ const validNumber = (n: number, label: string, minimum = 0): void => {
 }
 
 export async function upsertItem(item: Item): Promise<number> {
+  await requireUnlocked()
   for (const [label, value] of Object.entries({ MRP: item.mrp, Discount: item.discountPercent, GST: item.gstPercent, Cost: item.purchasePrice, Alert: item.lowStockAlert })) validNumber(value, label)
   validNumber(item.stockQty, 'Stock', -Infinity)
   if (item.discountPercent > 100 || item.gstPercent > 100) throw new Error('Percentage 0–100 honi chahiye')
-  return db.transaction('rw', db.items, db.invoices, async () => {
+  return db.transaction('rw', db.items, db.invoices, db.users, async () => {
+    await requireUnlocked()
     const previous = item.id ? await db.items.get(item.id) : undefined
     if (item.id && !previous) throw new Error(staleMessage)
     if (previous && item.updatedAt !== previous.updatedAt) throw new Error(staleMessage)
@@ -86,8 +89,10 @@ export async function upsertItem(item: Item): Promise<number> {
 export const deleteItem = (id: number): Promise<void> => deleteRecord('items', id)
 
 export async function adjustStock(itemId: number, delta: number): Promise<void> {
+  await requireUnlocked()
   validNumber(delta, 'Stock adjustment', -Infinity)
-  await db.transaction('rw', db.items, db.invoices, async () => {
+  await db.transaction('rw', db.items, db.invoices, db.users, async () => {
+    await requireUnlocked()
     await reconcileInventory(db)
     const item = await db.items.get(itemId)
     if (!item) return
@@ -110,6 +115,7 @@ export async function findItemByCode(code: string): Promise<Item | undefined> {
 export const listParties = () => db.parties.orderBy('name').toArray()
 
 export async function upsertParty(p: Party): Promise<number> {
+  await requireUnlocked()
   const previous = p.id ? await db.parties.get(p.id) : undefined
   p = { ...p, syncId: previous?.syncId ?? p.syncId, updatedAt: Date.now() }
   if (p.id) {
@@ -200,9 +206,11 @@ export function validateInvoice(inv: Invoice): void {
 }
 
 export async function saveInvoice(inv: Invoice, shopState = '08'): Promise<number> {
+  await requireUnlocked()
   void shopState
   validateInvoice(inv)
-  return db.transaction('rw', db.invoices, db.docSettings, db.items, async () => {
+  return db.transaction('rw', db.invoices, db.docSettings, db.items, db.users, async () => {
+    await requireUnlocked()
     let id = inv.id
     const existing = id ? await db.invoices.get(id) : undefined
     if (id && !existing) throw new Error(staleMessage)
@@ -250,7 +258,9 @@ export async function saveInvoice(inv: Invoice, shopState = '08'): Promise<numbe
 }
 
 export async function deleteInvoice(id: number): Promise<void> {
-  await db.transaction('rw', db.invoices, db.items, db.tombstones, async () => {
+  await requireUnlocked()
+  await db.transaction('rw', db.invoices, db.items, db.tombstones, db.users, async () => {
+    await requireUnlocked()
     await reconcileInventory(db)
     await deleteRecord('invoices', id)
     await reconcileInventory(db)
@@ -258,7 +268,9 @@ export async function deleteInvoice(id: number): Promise<void> {
 }
 
 export async function cancelInvoice(id: number): Promise<void> {
-  await db.transaction('rw', db.invoices, db.items, async () => {
+  await requireUnlocked()
+  await db.transaction('rw', db.invoices, db.items, db.users, async () => {
+    await requireUnlocked()
     await reconcileInventory(db)
     const inv = await db.invoices.get(id)
     if (!inv) return
@@ -268,7 +280,9 @@ export async function cancelInvoice(id: number): Promise<void> {
 }
 
 export async function restoreInvoice(id: number): Promise<void> {
-  await db.transaction('rw', db.invoices, db.items, async () => {
+  await requireUnlocked()
+  await db.transaction('rw', db.invoices, db.items, db.users, async () => {
+    await requireUnlocked()
     await reconcileInventory(db)
     const inv = await db.invoices.get(id)
     if (!inv) return
@@ -285,9 +299,11 @@ export async function restoreInvoice(id: number): Promise<void> {
 }
 
 export async function recordPayment(invoiceId: number, payment: Omit<PaymentEntry, 'id'>): Promise<void> {
+  await requireUnlocked()
   validNumber(payment.amount, 'Payment', Number.MIN_VALUE)
   validDate(payment.date)
-  await db.transaction('rw', db.invoices, async () => {
+  await db.transaction('rw', db.invoices, db.users, async () => {
+    await requireUnlocked()
     const inv = await db.invoices.get(invoiceId)
     if (!inv || inv.status !== 'FINAL') throw new Error('Bill active nahi hai')
     await db.invoices.update(invoiceId, { payments: [...(inv.payments ?? []), { ...payment, id: uid() }], updatedAt: nextStamp(inv.updatedAt) })
@@ -295,7 +311,9 @@ export async function recordPayment(invoiceId: number, payment: Omit<PaymentEntr
 }
 
 export async function removePayment(invoiceId: number, paymentId: string): Promise<void> {
-  await db.transaction('rw', db.invoices, async () => {
+  await requireUnlocked()
+  await db.transaction('rw', db.invoices, db.users, async () => {
+    await requireUnlocked()
     const inv = await db.invoices.get(invoiceId)
     if (!inv) throw new Error('Bill nahi mila')
     await db.invoices.update(invoiceId, {
@@ -386,6 +404,7 @@ export const listPayments = (): Promise<PartyPayment[]> =>
   db.payments.orderBy('date').reverse().toArray()
 
 export async function addPayment(p: Omit<PartyPayment, 'id'>): Promise<number> {
+  await requireUnlocked()
   validNumber(p.amount, 'Payment', Number.MIN_VALUE)
   validDate(p.date)
   const { id: _drop, ...rest } = p as PartyPayment
@@ -462,6 +481,7 @@ export async function paymentRegister(from: string, to: string): Promise<Payment
 export const listExpenses = (): Promise<Expense[]> => db.expenses.orderBy('date').reverse().toArray()
 
 export async function upsertExpense(e: Expense): Promise<number> {
+  await requireUnlocked()
   validNumber(e.amount, 'Expense', Number.MIN_VALUE)
   validDate(e.date)
   const previous = e.id ? await db.expenses.get(e.id) : undefined
@@ -564,7 +584,9 @@ export async function agingReport(shopState = '08', today = todayISO()): Promise
 
 /** Purchase bill ke rate se item ka purchase price update karein */
 export async function applyPurchaseRates(inv: Invoice): Promise<number> {
-  return db.transaction('rw', db.items, async () => {
+  await requireUnlocked()
+  return db.transaction('rw', db.items, db.users, async () => {
+    await requireUnlocked()
     let updated = 0
     for (const line of inv.items) {
       if (!line.itemId) continue
@@ -591,8 +613,10 @@ async function markDeleted(name: SyncTableName, row: SyncRow): Promise<void> {
 }
 
 async function deleteRecord(name: SyncTableName, id: number): Promise<void> {
+  await requireUnlocked()
   const table = syncTable(name)
-  await db.transaction('rw', table, db.tombstones, async () => {
+  await db.transaction('rw', table, db.tombstones, db.users, async () => {
+    await requireUnlocked()
     const row = await table.get(id)
     if (row) await markDeleted(name, row)
     await table.delete(id)
@@ -600,7 +624,9 @@ async function deleteRecord(name: SyncTableName, id: number): Promise<void> {
 }
 
 export async function exportBackup(): Promise<string> {
-  return db.transaction('r', [...SYNC_TABLES.map(syncTable), db.tombstones], async () => {
+  await requireOwnerIfConfigured()
+  return db.transaction('r', [...SYNC_TABLES.map(syncTable), db.tombstones, db.users], async () => {
+    await requireOwnerIfConfigured()
     const data: Record<string, unknown> = { app: 'showroom-manager', version: 3, exportedAt: new Date().toISOString() }
     for (const name of SYNC_TABLES) data[name] = await syncTable(name).toArray()
     data.tombstones = await db.tombstones.toArray()
@@ -611,6 +637,7 @@ export async function exportBackup(): Promise<string> {
 }
 
 export async function importBackup(json: string, mode: 'replace' | 'merge' = 'merge'): Promise<void> {
+  await requireOwnerIfConfigured()
   const data = JSON.parse(json)
   if (!data || data.app !== 'showroom-manager' || !Array.isArray(data.items) || !Array.isArray(data.invoices)) {
     throw new Error('Invalid showroom backup')
@@ -622,7 +649,8 @@ export async function importBackup(json: string, mode: 'replace' | 'merge' = 'me
   }
   initializeInventory(data.items, data.invoices)
   const markers = (data.tombstones ?? []).map(normalizeTombstone)
-  await db.transaction('rw', [...SYNC_TABLES.map(syncTable), db.tombstones], async () => {
+  await db.transaction('rw', [...SYNC_TABLES.map(syncTable), db.tombstones, db.users], async () => {
+    await requireOwnerIfConfigured()
     if (mode === 'merge') {
       const incoming: Record<string, unknown> = { ...data, tombstones: markers }
       for (const name of SYNC_TABLES) {
@@ -671,7 +699,9 @@ export async function importBackup(json: string, mode: 'replace' | 'merge' = 'me
 }
 
 export async function wipeAllData(): Promise<void> {
-  await db.transaction('rw', [...SYNC_TABLES.map(syncTable), db.tombstones], async () => {
+  await requireOwnerIfConfigured()
+  await db.transaction('rw', [...SYNC_TABLES.map(syncTable), db.tombstones, db.users], async () => {
+    await requireOwnerIfConfigured()
     for (const name of SYNC_TABLES) {
       for (const row of await syncTable(name).toArray()) await markDeleted(name, row)
       await syncTable(name).clear()
