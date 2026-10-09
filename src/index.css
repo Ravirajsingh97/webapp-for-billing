@@ -508,6 +508,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
 /* A4 letterhead invoice: fixed paper geometry, scaled by PaperScaler on phones. */
 .paper-letterhead {
   min-height: 1123px;
+  border: 1px solid #252525;
   padding: 26px 30px 22px;
   display: flex;
   flex-direction: column;
@@ -529,7 +530,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
 .paper-letterhead th, .paper-letterhead td { border-color: #252525; font-size: 10px; line-height: 1.25; padding: 2px 3px; overflow-wrap: anywhere; }
 .paper-letterhead th { background: #c8eaf0; text-align: center; font-weight: 500; vertical-align: middle; }
 .paper-letterhead .letterhead-items { border: 1px solid #252525; }
-.paper-letterhead .letterhead-items tbody td { border-block: 0; }
 .paper-letterhead .letterhead-items .letterhead-total td { border-top: 1px solid #252525; font-weight: 700; }
 .letterhead-item-detail { font-size: 8px; color: #444; }
 .letterhead-center { text-align: center; }
@@ -554,7 +554,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
 .letterhead-payment-qr svg { flex-shrink: 0; }
 .letterhead-generated { margin-top: 4px; border: 0; font-size: 9px; }
 @media print {
-  .paper-letterhead { min-height: 278mm; padding: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .paper.paper-letterhead { min-height: 278mm; padding: 0; border: 1px solid #252525 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .paper-letterhead th, .paper-letterhead td { font-size: 9px; padding: 1.5px 3px; }
   .letterhead-items thead, .letterhead-tax thead { display: table-header-group; }
   .letterhead-item-row, .letterhead-summary-row, .letterhead-total, .letterhead-tax tr, .letterhead-signatures { break-inside: avoid; }
