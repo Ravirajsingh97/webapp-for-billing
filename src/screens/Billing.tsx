@@ -234,203 +234,206 @@ export function BillingScreen({
         </button>
       </div>
 
-      <div className="screen-content billing-content flex-1 px-3 pb-40">
-        {/* Doc type + date */}
-        <div className="mt-3 card">
-          <ChipRow>
-            {DOC_TYPES.map((d) => (
-              <button
-                key={d.key}
-                className="chip"
-                data-active={inv.docType === d.key}
-                onClick={() => setDocType(d.key)}
-              >
-                {d.icon} {d.label}
-              </button>
-            ))}
-          </ChipRow>
-          <div className="responsive-form-grid mt-2 grid grid-cols-2 gap-2">
-            <div className="field">
-              <label className="label">Date</label>
-              <input
-                type="date"
-                className="input"
-                value={inv.date}
-                onChange={(e) => patch({ date: e.target.value || todayISO() })}
-              />
-            </div>
-            <div className="field">
-              <label className="label">Bill number</label>
-              <input
-                className="input"
-                value={inv.number}
-                placeholder={numberPreview}
-                onChange={(e) => patch({ number: e.target.value })}
-              />
-            </div>
-          </div>
-          {(meta.key === 'TAX_INVOICE' || meta.key === 'PROFORMA') && (
-            <div className="mt-2 field">
-              <label className="label">Payment due date (optional)</label>
-              <input type="date" className="input" value={inv.dueDate ?? ''} onChange={(e) => patch({ dueDate: e.target.value })} />
-            </div>
-          )}
-        </div>
-
-        {/* Party */}
-        <button className="card mt-3 flex w-full items-center gap-3 text-left" onClick={() => setPartyOpen(true)}>
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-100 text-lg">{isPurchase ? '🏭' : '👤'}</div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold text-slate-900">
-              {inv.partyName || (isPurchase ? 'Supplier chunein' : 'Cash Sale / Walk-in Customer')}
-            </div>
-            <div className="truncate text-[11px] text-slate-500">
-              {inv.partyPhone ? `${inv.partyPhone} • ` : ''}
-              {isPurchase ? 'Supplier bill — stock badhega, payable banega' : 'Tap karke party chunein ya naya jodein'}
-            </div>
-          </div>
-          <span className="text-slate-400">›</span>
-        </button>
-
-        {/* Items */}
-        <div className="mt-3 card billing-items">
-          <div className="flex items-center justify-between">
-            <div className="text-[13px] font-bold text-slate-700">Items ({inv.items.length})</div>
-            <div className="flex gap-1.5">
-              <button className="btn btn-outline btn-sm" onClick={() => setScannerOpen(true)}>
-                ▮▯ Scan
-              </button>
-              <button className="btn btn-primary btn-sm" onClick={() => setPickerOpen(true)}>
-                ＋ Item
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-1">
-            {inv.items.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500">
-                Abhi koi item nahi. “＋ Item” dabakar ya barcode scan karke jodein.
+      <div className="screen-content billing-content flex-1">
+        <div className="billing-column">
+          {/* Doc type + date */}
+          <div className="card">
+            <ChipRow>
+              {DOC_TYPES.map((d) => (
+                <button
+                  key={d.key}
+                  className="chip"
+                  data-active={inv.docType === d.key}
+                  onClick={() => setDocType(d.key)}
+                >
+                  {d.icon} {d.label}
+                </button>
+              ))}
+            </ChipRow>
+            <div className="responsive-form-grid mt-2 grid grid-cols-2 gap-2">
+              <div className="field">
+                <label className="label">Date</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={inv.date}
+                  onChange={(e) => patch({ date: e.target.value || todayISO() })}
+                />
               </div>
-            ) : null}
-            {inv.items.map((l, i) => {
-              const lt = t.lines[i]
-              return (
-                <div key={l.id} className="cart-line">
-                  <div className="billing-line-layout">
-                    <button className="min-w-0 flex-1 text-left" onClick={() => setEditLine(l)}>
-                      <div className="truncate text-[13px] font-semibold text-slate-900">{l.name}</div>
-                      <div className="truncate text-[11px] text-slate-500">
-                        {quantity(l.qty)} {l.unit} × {num(l.rate)}
-                        {l.discountPercent ? ` − ${num(l.discountPercent, 0)}%` : ''}
-                        {l.gstPercent ? ` + GST ${num(l.gstPercent, 0)}%` : ''}
+              <div className="field">
+                <label className="label">Bill number</label>
+                <input
+                  className="input"
+                  value={inv.number}
+                  placeholder={numberPreview}
+                  onChange={(e) => patch({ number: e.target.value })}
+                />
+              </div>
+            </div>
+            {(meta.key === 'TAX_INVOICE' || meta.key === 'PROFORMA') && (
+              <div className="mt-2 field">
+                <label className="label">Payment due date (optional)</label>
+                <input type="date" className="input" value={inv.dueDate ?? ''} onChange={(e) => patch({ dueDate: e.target.value })} />
+              </div>
+            )}
+          </div>
+
+          {/* Party */}
+          <button className="card flex w-full items-center gap-3 text-left" onClick={() => setPartyOpen(true)}>
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-lg">{isPurchase ? '🏭' : '👤'}</div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold text-slate-900">
+                {inv.partyName || (isPurchase ? 'Supplier chunein' : 'Cash Sale / Walk-in Customer')}
+              </div>
+              <div className="truncate text-[11px] text-slate-500">
+                {inv.partyPhone ? `${inv.partyPhone} • ` : ''}
+                {isPurchase ? 'Supplier bill — stock badhega, payable banega' : 'Tap karke party chunein ya naya jodein'}
+              </div>
+            </div>
+            <span className="text-slate-400">›</span>
+          </button>
+
+          {/* Items */}
+          <div className="card billing-items">
+            <div className="flex items-center justify-between">
+              <div className="text-[13px] font-bold text-slate-700">Items ({inv.items.length})</div>
+              <div className="flex gap-1.5">
+                <button className="btn btn-outline btn-sm" onClick={() => setScannerOpen(true)}>
+                  ▮▯ Scan
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => setPickerOpen(true)}>
+                  ＋ Item
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-1">
+              {inv.items.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-500">
+                  Abhi koi item nahi. “＋ Item” dabakar ya barcode scan karke jodein.
+                </div>
+              ) : null}
+              {inv.items.map((l, i) => {
+                const lt = t.lines[i]
+                return (
+                  <div key={l.id} className="cart-line">
+                    <div className="billing-line-layout">
+                      <button className="min-w-0 flex-1 text-left" onClick={() => setEditLine(l)}>
+                        <div className="truncate text-[13px] font-semibold text-slate-900">{l.name}</div>
+                        <div className="truncate text-[11px] text-slate-500">
+                          {quantity(l.qty)} {l.unit} × {num(l.rate)}
+                          {l.discountPercent ? ` − ${num(l.discountPercent, 0)}%` : ''}
+                          {l.gstPercent ? ` + GST ${num(l.gstPercent, 0)}%` : ''}
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-1">
+                        <button className="qty-btn" onClick={() => bumpQty(l.id, -1)}>
+                          −
+                        </button>
+                        <span className="num w-8 text-center text-sm font-bold">{quantity(l.qty)}</span>
+                        <button className="qty-btn" onClick={() => bumpQty(l.id, 1)}>
+                          +
+                        </button>
                       </div>
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <button className="qty-btn" onClick={() => bumpQty(l.id, -1)}>
-                        −
-                      </button>
-                      <span className="num w-8 text-center text-sm font-bold">{quantity(l.qty)}</span>
-                      <button className="qty-btn" onClick={() => bumpQty(l.id, 1)}>
-                        +
-                      </button>
-                    </div>
-                    <div className="num w-[74px] shrink-0 text-right text-[13px] font-bold text-slate-900">
-                      {money(lt?.total ?? 0)}
+                      <div className="num w-[74px] shrink-0 text-right text-[13px] font-bold text-slate-900">
+                        {money(lt?.total ?? 0)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
-
-        {/* Discounts & charges */}
-        <div className="mt-3 card">
-          <div className="flex items-center justify-between">
-            <div className="text-[13px] font-bold text-slate-700">Bill discount</div>
-            <div className="flex items-center gap-1.5">
-              <Segmented
-                size="sm"
-                value={inv.billDiscountType}
-                onChange={(v) => patch({ billDiscountType: v as 'PERCENT' | 'AMOUNT' })}
-                options={[
-                  { value: 'PERCENT', label: '%' },
-                  { value: 'AMOUNT', label: '₹' },
-                ]}
-              />
+        <div className="billing-column">
+          {/* Discounts & charges */}
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div className="text-[13px] font-bold text-slate-700">Bill discount</div>
+              <div className="flex items-center gap-1.5">
+                <Segmented
+                  size="sm"
+                  value={inv.billDiscountType}
+                  onChange={(v) => patch({ billDiscountType: v as 'PERCENT' | 'AMOUNT' })}
+                  options={[
+                    { value: 'PERCENT', label: '%' },
+                    { value: 'AMOUNT', label: '₹' },
+                  ]}
+                />
+                <input
+                  className="input billing-discount-input text-right font-bold"
+                  inputMode="decimal"
+                  value={inv.billDiscountValue || ''}
+                  placeholder="0"
+                  onChange={(e) => patch({ billDiscountValue: clamp(Number(e.target.value) || 0, 0, 100000) })}
+                />
+              </div>
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
+              <button className="text-[13px] font-semibold text-slate-700" onClick={() => setChargesOpen(true)}>
+                ＋ Extra charges (freight, hamali)
+              </button>
+              <span className="num text-[13px] font-bold text-slate-700">{money(t.charges)}</span>
+            </div>
+            <label className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-[13px] font-semibold text-slate-700">
+              <span>Round off total</span>
               <input
-                className="input w-20 py-1.5 text-right text-sm font-bold"
-                inputMode="decimal"
-                value={inv.billDiscountValue || ''}
-                placeholder="0"
-                onChange={(e) => patch({ billDiscountValue: clamp(Number(e.target.value) || 0, 0, 100000) })}
+                type="checkbox"
+                className="h-5 w-5 accent-brand-600"
+                checked={inv.roundOffEnabled}
+                onChange={(e) => patch({ roundOffEnabled: e.target.checked })}
               />
-            </div>
+            </label>
           </div>
-          <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
-            <button className="text-[13px] font-semibold text-slate-700" onClick={() => setChargesOpen(true)}>
-              ＋ Extra charges (freight, hamali)
-            </button>
-            <span className="num text-[13px] font-bold text-slate-700">{money(t.charges)}</span>
-          </div>
-          <label className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-[13px] font-semibold text-slate-700">
-            <span>Round off total</span>
-            <input
-              type="checkbox"
-              className="h-5 w-5 accent-brand-600"
-              checked={inv.roundOffEnabled}
-              onChange={(e) => patch({ roundOffEnabled: e.target.checked })}
-            />
-          </label>
-        </div>
 
-        {/* Payment */}
-        <div className="mt-3 card">
-          <div className="text-[13px] font-bold text-slate-700">Payment</div>
-          <div className="mt-2 flex gap-1.5">
-            <button className="chip" onClick={() => setPaidInput(String(t.grandTotal))}>
-              Full paid
-            </button>
-            <button className="chip" onClick={() => setPaidInput(String(round2(t.grandTotal / 2)))}>
-              Half
-            </button>
-            <button className="chip" onClick={() => setPaidInput('0')}>
-              {isPurchase ? 'Udhaar (payable)' : 'Udhaar (credit)'}
-            </button>
-          </div>
-          <div className="responsive-form-grid mt-2 grid grid-cols-2 gap-2">
-            <div className="field">
-              <label className="label">{isPurchase ? 'Paid to supplier (₹)' : 'Received (₹)'}</label>
-              <input
-                className="input input-lg"
-                inputMode="decimal"
-                value={paidInput}
-                placeholder="0"
-                onChange={(e) => setPaidInput(e.target.value)}
-              />
+          {/* Payment */}
+          <div className="card">
+            <div className="text-[13px] font-bold text-slate-700">Payment</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button className="chip" onClick={() => setPaidInput(String(t.grandTotal))}>
+                Full paid
+              </button>
+              <button className="chip" onClick={() => setPaidInput(String(round2(t.grandTotal / 2)))}>
+                Half
+              </button>
+              <button className="chip" onClick={() => setPaidInput('0')}>
+                {isPurchase ? 'Udhaar (payable)' : 'Udhaar (credit)'}
+              </button>
             </div>
-            <div className="field">
-              <label className="label">Mode</label>
-              <select className="select" value={payMode} onChange={(e) => setPayMode(e.target.value as PaymentMode)}>
-                {PAYMENT_MODES.map((m) => (
-                  <option key={m.key} value={m.key}>
-                    {m.label} ({m.hi})
-                  </option>
-                ))}
-              </select>
+            <div className="responsive-form-grid mt-2 grid grid-cols-2 gap-2">
+              <div className="field">
+                <label className="label">{isPurchase ? 'Paid to supplier (₹)' : 'Received (₹)'}</label>
+                <input
+                  className="input input-lg"
+                  inputMode="decimal"
+                  value={paidInput}
+                  placeholder="0"
+                  onChange={(e) => setPaidInput(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Mode</label>
+                <select className="select" value={payMode} onChange={(e) => setPayMode(e.target.value as PaymentMode)}>
+                  {PAYMENT_MODES.map((m) => (
+                    <option key={m.key} value={m.key}>
+                      {m.label} ({m.hi})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="num mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-[13px] font-bold">
+              <span className="text-slate-600">{isPurchase ? 'Supplier ko dena baki' : 'Baki (due)'}</span>
+              <span className={t.grandTotal - paidAmount > 0.5 ? 'text-due' : 'text-money'}>
+                {money(Math.max(0, round2(t.grandTotal - paidAmount)))}
+              </span>
             </div>
           </div>
-          <div className="num mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-[13px] font-bold">
-            <span className="text-slate-600">{isPurchase ? 'Supplier ko dena baki' : 'Baki (due)'}</span>
-            <span className={t.grandTotal - paidAmount > 0.5 ? 'text-due' : 'text-money'}>
-              {money(Math.max(0, round2(t.grandTotal - paidAmount)))}
-            </span>
-          </div>
-        </div>
 
-        <button className="btn btn-outline btn-block mt-3" onClick={() => setDetailsOpen(true)}>
-          📝 Notes, transport & terms
-        </button>
+          <button className="btn btn-outline btn-block" onClick={() => setDetailsOpen(true)}>
+            📝 Notes, transport & terms
+          </button>
+        </div>
       </div>
 
       {/* Sticky total bar */}

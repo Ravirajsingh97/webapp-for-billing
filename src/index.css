@@ -325,6 +325,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
 .sheet-body { min-height: 0; overscroll-behavior: contain; }
 .toast { overflow-wrap: anywhere; }
 .pos-layout { display: grid; gap: 1.25rem; align-items: start; }
+.billing-content { display: grid; gap: 1rem; align-content: start; align-items: start; }
+.billing-column { display: flex; min-width: 0; flex-direction: column; gap: 1rem; }
+.billing-discount-input { width: 5rem; flex: 0 0 5rem; }
+.responsive-form-grid > .field > .input,
+.responsive-form-grid > .field > .select { flex: 1; min-height: 44px; }
 .billing-line-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
 .billing-line-layout > button { grid-column: 1 / -1; }
 .billing-line-layout > .num { width: auto; }
@@ -351,9 +356,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
   .topbar { padding: 1rem 2rem; }
   .topbar .text-sm { font-size: 1rem; }
   .form-page, .invoice-content { max-width: 1000px; margin-inline: auto; }
-  .billing-content { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1rem; align-content: start; align-items: start; }
-  .billing-content > .mt-3 { margin-top: 0; }
-  .billing-items { grid-column: 1; grid-row: 2 / span 4; }
+  .billing-content { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
   .pos-cart-jump { display: none; }
   .pos-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 390px); }
   .pos-cart { position: sticky; top: 6rem; max-height: calc(100dvh - 7rem); overflow-y: auto; }
