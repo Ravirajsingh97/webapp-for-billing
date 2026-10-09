@@ -33,6 +33,8 @@ body {
 
 body {
   margin: 0;
+  min-width: 0;
+  overflow-x: hidden;
   background: #eef1f6;
   color: #0f172a;
   font-family: var(--font-sans);
@@ -53,7 +55,7 @@ body {
 
 /* ---------- App shell ---------- */
 .app-shell {
-  @apply mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col bg-slate-50 shadow-xl;
+  @apply mx-auto flex min-h-dvh w-full max-w-[1440px] min-w-0 flex-col overflow-x-clip bg-slate-50 shadow-xl;
 }
 
 .topbar {
@@ -355,4 +357,125 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
   .pos-cart-jump { display: none; }
   .pos-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 390px); }
   .pos-cart { position: sticky; top: 6rem; max-height: calc(100dvh - 7rem); overflow-y: auto; }
+}
+
+/* ---------- Responsive refinement ----------
+   These small layout primitives keep dense billing forms usable at 320px while
+   giving lists, actions and item cards more room on tablets and desktops. */
+.responsive-form-grid > *,
+.stats-grid > *,
+.action-grid > *,
+.filter-toolbar > * {
+  min-width: 0;
+}
+
+.filter-toolbar,
+.filter-toolbar .filter-actions {
+  min-width: 0;
+}
+
+.table-scroll {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+.table-scroll table {
+  min-width: 36rem;
+}
+
+.company-create-row,
+.search-action-row {
+  min-width: 0;
+}
+
+@media (max-width: 479px) {
+  /* Two-column forms become single-column before fields become too narrow. */
+  .responsive-form-grid.grid-cols-2,
+  .responsive-form-grid.grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Keep compact metrics readable without forcing a horizontal scroll. */
+  .stats-grid.grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .action-grid.grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .filter-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .filter-toolbar .filter-actions {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .filter-toolbar .filter-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .home-quick-grid,
+  .document-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .company-create-row,
+  .search-action-row {
+    flex-wrap: wrap;
+  }
+  .company-create-row .btn {
+    flex: 1 1 100%;
+  }
+
+  .sticky-total > .flex:last-child {
+    flex-wrap: wrap;
+  }
+  .sticky-total > .flex:last-child > .btn {
+    flex: 1 1 7rem;
+  }
+
+  .sheet-foot > .flex {
+    flex-wrap: wrap;
+  }
+  .sheet-foot > .flex > .btn {
+    flex: 1 1 8rem;
+  }
+
+  .charge-row {
+    grid-template-columns: minmax(0, 1fr) minmax(80px, 1fr) auto !important;
+  }
+
+  /* Avoid a long business name pushing the top-bar actions off-screen. */
+  .topbar {
+    padding-inline: 0.75rem;
+  }
+  .topbar .btn {
+    padding-inline: 0.625rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .filter-toolbar .filter-actions {
+    min-width: 0;
+  }
+}
+
+@media (min-width: 1280px) {
+  .item-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.segmented > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 479px) {
+  .segmented > button {
+    padding-inline: 0.35rem;
+  }
 }

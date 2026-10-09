@@ -101,7 +101,7 @@ export function ItemsScreen({ business, focusLowStock }: { business: Business; f
         onScan={() => setSearchScannerOpen(true)}
       />
 
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="stats-grid mt-2 grid grid-cols-3 gap-2">
         <StatBox label="Items" value={num(stats.count, 0)} />
         <StatBox label="Stock (cost)" value={money(stats.stockValue)} />
         <StatBox label="Low stock" value={num(stats.low, 0)} tone={stats.low ? 'due' : 'default'} />
@@ -355,7 +355,7 @@ function ItemEditor({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="responsive-form-grid grid grid-cols-2 gap-3">
           <div className="field">
             <label className="label">Item code</label>
             <input className="input" value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} placeholder="HW-1234" />
@@ -371,7 +371,7 @@ function ItemEditor({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="responsive-form-grid grid grid-cols-2 gap-3">
           <div className="field">
             <label className="label">Brand / company</label>
             <input className="input" list="brand-list" value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} />
@@ -400,7 +400,7 @@ function ItemEditor({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="responsive-form-grid grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="field">
             <label className="label">Unit</label>
             <select className="select" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })}>
@@ -443,7 +443,7 @@ function ItemEditor({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="responsive-form-grid grid grid-cols-3 gap-3">
           <div className="field">
             <label className="label">Purchase rate</label>
             <input

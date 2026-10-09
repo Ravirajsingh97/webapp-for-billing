@@ -79,13 +79,13 @@ export function ExpensesScreen({ business }: { business: Business }) {
         ))}
       </ChipRow>
       {range === 'custom' ? (
-        <div className="mt-1 grid grid-cols-2 gap-2">
+        <div className="responsive-form-grid mt-1 grid grid-cols-2 gap-2">
           <input type="date" className="input" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
           <input type="date" className="input" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
         </div>
       ) : null}
 
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="stats-grid mt-2 grid grid-cols-3 gap-2">
         <StatBox label="Total kharcha" value={money(total)} tone="due" />
         <StatBox label="Entries" value={num(filtered.length, 0)} />
         <StatBox
@@ -281,7 +281,7 @@ function ExpenseEditor({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="responsive-form-grid grid grid-cols-2 gap-3">
           <div className="field">
             <label className="label">Amount (₹) *</label>
             <input

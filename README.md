@@ -3,7 +3,7 @@
 MyBillBook जैसा **showroom billing app** — GST invoice, estimate, barcode billing, stock aur reports.
 पूरा offline चलता है, data आपके phone/browser में ही रहता है (कोई login नहीं, कोई server नहीं)।
 
-यह `webapp/` folder उसी repo की Android app (`app/`) का **web version** है — phone में "Add to Home screen" करके
+यह repository अपने आप में पूरा web app है — किसी दूसरे folder में जाने की ज़रूरत नहीं। Phone में "Add to Home screen" करके इसे
 native app की तरह install किया जा सकता है।
 
 ---
@@ -79,12 +79,21 @@ native app की तरह install किया जा सकता है।
 ## 🚀 चलाने का तरीका (development)
 
 ```bash
-cd webapp
-npm install
-npm run dev        # http://localhost:5173
+npm ci              # repeatable install (पहली बार)
+npm run dev         # http://localhost:5173
 ```
 
 दूसरे device/network से खोलने के लिए server पहले से `0.0.0.0` पर bind है।
+
+### 📐 Responsive UI
+
+UI को छोटे **320px mobile**, tablet और बड़े PC/desktop के लिए responsive रखा गया है:
+
+- mobile पर dense forms single-column हो जाते हैं, touch targets कम-से-कम 44px रहते हैं और sheets safe-area के साथ खुलती हैं;
+- tablet पर cards और item catalogue दो/तीन columns में फैलते हैं;
+- desktop पर POS catalogue + cart side-by-side रहता है, item grid में ज़्यादा columns आते हैं और invoice preview
+  container की width के हिसाब से scale होता है;
+- GST/HSN और aging जैसी wide tables mobile पर horizontal scroll होती हैं, page को बाहर नहीं धकेलतीं।
 
 Production build:
 
@@ -108,14 +117,49 @@ Kuch environments (jaise sandbox/CI) `node_modules` ko save nahi rakhte — us c
 
 ```bash
 npm run build:preview     # dist build karke preview-build/ folder banata hai
-npm run serve:static      # http://localhost:4173  (koi node_modules nahi chahiye)
+npm run serve:static      # http://localhost:4173  (build ke baad)
 ```
 
-Build hone ke baad `webapp/preview-build/` folder kisi bhi static hosting (ya `python3 -m http.server`)
+Build hone ke baad `preview-build/` folder kisi bhi static hosting (ya `python3 -m http.server`)
 se serve ho jata hai — app wahi pura kaam karta hai (offline bhi, kyunki service worker saath aata hai).
 Windows par serve karne ke liye `npx serve preview-build` ya VS Code ka Live Server bhi chalega.
 
+## 🤖 CodeRabbit पर review / coding task चलाने का तरीका
 
+इस repo में CodeRabbit के लिए root में `.coderabbit.yaml`, Node 22 के लिए `.nvmrc`,
+और PR checks के लिए `.github/workflows/webapp-ci.yml` मौजूद हैं। CodeRabbit को install करने के लिए
+README में कोई secret, API key या Firebase config डालने की ज़रूरत नहीं है।
+
+### पहली बार setup
+
+1. [coderabbit.ai](https://coderabbit.ai) पर GitHub से sign in करें और **Add repository** में
+   `Ravirajsingh97/webapp-for-billing` चुनें। GitHub में **Settings → Integrations → GitHub Apps →
+   CodeRabbit → Configure** खोलकर भी पक्का करें कि यही repository selected है।
+2. CodeRabbit का **Coding Agent** इस्तेमाल करना हो तो [CodeRabbit Code](https://app.coderabbit.ai/code)
+   में इस repository और `main` branch को चुनें। Automatic environment में Node **22** रखें;
+   ज़रूरत पड़े तो setup command `npm ci` और startup/verification command `npm run verify` दें।
+3. CodeRabbit सामान्यतः **pull request (PR)** पर review करता है, सीधे `main` पर push करने से नहीं।
+   PR को draft न रखें; README-only/documentation PR भी review हो सकता है। Review न आए तो PR में
+   `@coderabbitai review` comment करें।
+
+### इस repo में change करके PR बनाना
+
+```bash
+git checkout -b my-change       # अपनी feature branch का नाम
+git add .
+git commit -m "Describe the change"
+git push -u origin my-change
+```
+
+फिर GitHub में **Compare & pull request** खोलकर base branch `main` चुनें। PR खुलने के बाद CodeRabbit
+review summary और inline comments देगा। Review comments ठीक करके उसी branch पर फिर push करें; CodeRabbit
+incremental review चला देगा।
+
+> **“Task failed: Something went wrong while running this task”** अगर task शुरू होने से पहले ही आता है,
+> तो यह README या app code की error नहीं, अक्सर CodeRabbit GitHub App की repository access/permissions या
+> Coding Environment की setup समस्या होती है। पहले सही repo selected है या नहीं देखें, task को `main` से
+> दोबारा शुरू करें, Node 22 + `npm ci` रखें, और stale/closed PR की जगह नया non-draft PR try करें। फिर भी
+> error रहे तो CodeRabbit में repository को remove करके दोबारा add/reconnect करें।
 
 ### ☁️ Cloud account (Google / Email) + data sync
 
@@ -178,7 +222,7 @@ Technical: `src/lib/cloud.ts` (Firebase Auth + Firestore REST, koi SDK nahi — 
 Kuch jagah (preview iframe, purane phone browser, WhatsApp par share) ke liye ek hi file sabse aasan hai:
 
 ```bash
-npm run build:single      # banata hai: webapp/showroom-manager-app.html  (~790 KB)
+npm run build:single      # banata hai: showroom-manager-app.html  (~790 KB)
 ```
 
 Us ek file me **pura app** (JS + CSS) inline hai. Ise:
@@ -189,9 +233,11 @@ Us ek file me **pura app** (JS + CSS) inline hai. Ise:
 Data usi browser me (IndexedDB) save hota hai, isliye ek hi browser me use karein.
 
 ## 🌐 Deploy
-GitHub Actions workflow `.github/workflows/deploy-webapp.yml` — `main` branch पर push होने पर webapp build होकर
-**GitHub Pages** पर deploy हो जाता है (https://<user>.github.io/showroom-manager1/)।
-इसी HTTPS link को phone में खोलकर install किया जा सकता है।
+`npm run build` के बाद `dist/` को किसी भी static hosting पर publish किया जा सकता है। Vite में relative base
+रखा गया है, इसलिए GitHub Pages जैसे sub-path पर भी build चलता है। GitHub Actions का
+`.github/workflows/webapp-ci.yml` हर `main` push और PR पर typecheck, smoke test और production build चलाता है।
+Pages deploy करने के लिए repository Settings → Pages में अपनी पसंद का deploy workflow/branch चुनें।
+
 
 ## 🧪 Testing (smoke test)
 
@@ -200,17 +246,12 @@ Poore billing flow ka automated test hai (jsdom + fake IndexedDB) — isi se dat
 Repo root se:
 
 ```bash
-npm --prefix webapp run smoke
-```
-
-Ya `webapp` ke andar se:
-
-```bash
 npm run smoke
 npm run verify     # TypeScript + smoke suite
 ```
 
-Preflight missing test packages install kar sakta hai. Deterministic setup ke liye `webapp/` me pehle `npm ci` chalayein. Har run ant me actual passed/total check count dikhata hai.
+`npm ci` के बाद test packages lockfile से deterministic तरीके से install होते हैं। Har run ant me actual
+passed/total check count dikhata hai.
 
 ### ⚠️ Phir bhi nahi chala? Ye 3 cheezein check karein
 
@@ -218,14 +259,14 @@ Preflight missing test packages install kar sakta hai. Deterministic setup ke li
 | --- | --- | --- |
 | `npm: command not found` | Node.js install nahi hai | Node 22 install karein: https://nodejs.org (ya `winget install OpenJS.NodeJS` / `brew install node`) |
 | `npm ERR! network` / install fail | internet/proxy ya company firewall | mobile hotspot se try karein, ya `SMOKE_NO_INSTALL=1` ke saath manual `npm install` |
-| `Missing script: "smoke"` | aap purane commit/branch par hain (`main` branch me ye kaam abhi merge nahi hua) | `git pull origin main` se latest code lein, phir `webapp/` me command chalayein |
+| `Missing script: "smoke"` | aap purane commit/branch par hain | `git pull origin main` करें, फिर repo root में command चलाएँ |
 | `Node ... is not supported` | Node purana (20 se kam) | Node 22 install karein |
 
 **Terminal hi nahi chahiye?** App ke andar hi self-test hai: **Settings → 🧪 App self-test** (browser me,
 bill banake, payment lekar, purchase karke — aur ant me sab rollback).
 
-GitHub par har push ke saath ye test apne aap (clean environment me) chalta hai —
-workflow: `.github/workflows/webapp-test.yml` → tab **Actions → Web App Smoke Test** me result dikhta hai.
+GitHub par `main` par push ya `main` ko target karne wale PR ke saath ye test apne aap (clean environment me)
+chalta hai — workflow: `.github/workflows/webapp-ci.yml` → tab **Actions → Web App CI** me result dikhta hai.
 
 ### 🧪 App ke andar wala self-test (bina terminal)
 **Settings → 🧪 App self-test** dabayein. Ye usi billing engine ko browser me chalata hai (checks:

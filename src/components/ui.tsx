@@ -166,12 +166,12 @@ export function Segmented<T extends string>({
   size?: 'sm' | 'md'
 }) {
   return (
-    <div className="flex rounded-xl bg-slate-100 p-0.5">
+    <div className="segmented flex min-w-0 rounded-xl bg-slate-100 p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`flex-1 rounded-[10px] font-semibold transition ${
+          className={`min-w-0 flex-1 rounded-[10px] break-words text-center font-semibold transition ${
             size === 'sm' ? 'px-2 py-1.5 text-[11px]' : 'px-2.5 py-2 text-xs'
           } ${value === o.value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}
         >

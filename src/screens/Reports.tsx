@@ -221,7 +221,7 @@ export function ReportsScreen({ business }: { business: Business }) {
         ))}
       </ChipRow>
       {range === 'custom' ? (
-        <div className="mt-1 grid grid-cols-2 gap-2">
+        <div className="responsive-form-grid mt-1 grid grid-cols-2 gap-2">
           <input type="date" className="input" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
           <input type="date" className="input" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
         </div>
@@ -240,7 +240,7 @@ export function ReportsScreen({ business }: { business: Business }) {
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="stats-grid mt-2 grid grid-cols-2 gap-2">
         <StatBox label="Taxable value" value={money(report.taxable)} />
         <StatBox label="GST collect hua" value={money(report.tax)} tone="brand" />
         <StatBox label="Discount diya" value={money(report.discount)} tone="due" />
@@ -352,7 +352,7 @@ export function ReportsScreen({ business }: { business: Business }) {
       <div className="section-title mt-4">
         <span>GST / HSN summary (GSTR-1 jaisa)</span>
       </div>
-      <div className="card-flat overflow-auto">
+      <div className="card-flat table-scroll overflow-auto">
         {report.hsn.length === 0 ? (
           <div className="px-3 py-3 text-[12px] text-slate-500">Is period me koi taxable sale nahi.</div>
         ) : (
@@ -486,7 +486,7 @@ export function ReportsScreen({ business }: { business: Business }) {
           { value: 'PAYABLE', label: `⬆ Dena hai ${money(aging.totalPayable, 0)}` },
         ]}
       />
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="stats-grid mt-2 grid grid-cols-2 gap-2">
         <StatBox
           label="0–30 din"
           value={money(
@@ -502,7 +502,7 @@ export function ReportsScreen({ business }: { business: Business }) {
           icon="⚠️"
         />
       </div>
-      <div className="card-flat mt-2 overflow-auto">
+      <div className="card-flat table-scroll mt-2 overflow-auto">
         {(() => {
           const rows = agingTab === 'RECEIVABLE' ? aging.receivables : aging.payables
           if (!rows.length) {
@@ -592,7 +592,7 @@ export function ReportsScreen({ business }: { business: Business }) {
         const cashOut = (dayBook ?? []).filter((r) => r.direction === 'OUT').reduce((s, r) => s + r.amount, 0)
         return (
           <>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="stats-grid mt-2 grid grid-cols-2 gap-2">
               <StatBox label="Us din ki sale" value={money(round2(daySale))} tone="money" />
               <StatBox label="Us din ki purchase" value={money(round2(dayPurchase))} />
               <StatBox label="Paisa aaya" value={money(round2(cashIn))} tone="money" />

@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+preview-build/
+coverage/
+smoke/.build/
+showroom-manager-app.html
+
+# TypeScript / tooling caches
+*.tsbuildinfo
+.vite/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

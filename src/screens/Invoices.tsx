@@ -129,20 +129,20 @@ export function InvoicesScreen({
       </div>
 
       {range === 'custom' ? (
-        <div className="mt-1 grid grid-cols-2 gap-2">
+        <div className="responsive-form-grid mt-1 grid grid-cols-2 gap-2">
           <input type="date" className="input" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
           <input type="date" className="input" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
         </div>
       ) : null}
 
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="stats-grid mt-2 grid grid-cols-3 gap-2">
         <StatBox label="Bills" value={num(filtered.length, 0)} sub={`${fmtDate(from)} – ${fmtDate(to)}`} />
         <StatBox label="Sale" value={money(totals.sale)} tone="money" />
         <StatBox label="Baki (lena)" value={money(totals.due)} tone="due" />
       </div>
 
-      <div className="mt-2 flex items-center justify-between">
-        <div className="flex gap-1.5">
+      <div className="filter-toolbar mt-2 flex items-center justify-between">
+        <div className="filter-actions flex gap-1.5">
           {(['ALL', 'PAID', 'DUE'] as StatusKey[]).map((s) => (
             <button key={s} className="chip" data-active={status === s} onClick={() => setStatus(s)}>
               {s === 'ALL' ? 'Sab' : s === 'PAID' ? 'Paid' : 'Baki wale'}
@@ -150,7 +150,7 @@ export function InvoicesScreen({
           ))}
         </div>
         <button
-          className="btn btn-ghost btn-sm"
+          className="toolbar-export btn btn-ghost btn-sm"
           onClick={() => {
             if (!filtered.length) {
               toast('Export ke liye koi bill nahi', 'error')
