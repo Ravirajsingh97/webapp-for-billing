@@ -255,8 +255,8 @@ passed/total check count dikhata hai.
 **Terminal hi nahi chahiye?** App ke andar hi self-test hai: **Settings → 🧪 App self-test** (browser me,
 bill banake, payment lekar, purchase karke — aur ant me sab rollback).
 
-GitHub par har push/PR ke saath ye test apne aap (clean environment me) chalta hai —
-workflow: `.github/workflows/webapp-ci.yml` → tab **Actions → Web App CI** me result dikhta hai.
+GitHub par `main` par push ya `main` ko target karne wale PR ke saath ye test apne aap (clean environment me)
+chalta hai — workflow: `.github/workflows/webapp-ci.yml` → tab **Actions → Web App CI** me result dikhta hai.
 
 ### 🧪 App ke andar wala self-test (bina terminal)
 **Settings → 🧪 App self-test** dabayein. Ye usi billing engine ko browser me chalata hai (checks:
