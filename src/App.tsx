@@ -101,6 +101,7 @@ export default function App() {
       try {
         const r = await syncNow()
         if (alive && r.added + r.updated > 0) {
+          await loadBusiness()
           toast(`☁️ Cloud se ${r.added} nayi, ${r.updated} update aayi`, 'success')
         }
       } catch (e) {
@@ -113,7 +114,7 @@ export default function App() {
       alive = false
       clearInterval(t)
     }
-  }, [gate, cloudRevision])
+  }, [gate, cloudRevision, loadBusiness])
 
   useEffect(() => {
     const onPop = () => setRoute((r) => (r.name === 'none' ? r : { name: 'none' }))

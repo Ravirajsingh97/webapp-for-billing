@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/db'
 import { computeTotals } from '../lib/calc'
-import { money, num, round2, todayISO, uid, clamp } from '../lib/format'
-import { peekNumber, saveInvoice } from '../lib/repo'
+import { money, num, quantity, round2, todayISO, uid, clamp } from '../lib/format'
+import { peekNumber, saveInvoice, validateInvoice } from '../lib/repo'
 import { docMeta, DOC_TYPES, GST_RATES, PAYMENT_MODES, STATES, UNITS } from '../lib/types'
 import type { Business, DocType, Invoice, Item, LineItem, Party, PaymentMode } from '../lib/types'
 import { BarcodeScanner } from '../components/BarcodeScanner'
@@ -37,6 +37,7 @@ export function BillingScreen({
   const [moreOpen, setMoreOpen] = useState(false)
   const [paidInput, setPaidInput] = useState('')
   const [payMode, setPayMode] = useState<PaymentMode>('CASH')
+  const savingRef = useRef(false)
   const [saving, setSaving] = useState(false)
   const [previewMode, setPreviewMode] = useState<PrintMode | null>(null)
   const [printJob, setPrintJob] = useState<PrintMode | null>(null)
@@ -165,8 +166,8 @@ export function BillingScreen({
   const setDocType = (docType: DocType) => {
     if (inv.items.length && inv.docType !== docType) {
       const target = docMeta(docType)
-      if (target.noTax) patch({ docType, items: inv.items.map((l) => ({ ...l, gstPercent: 0 })) })
-      else patch({ docType, number: '', items: inv.items.map((l) => ({ ...l, gstPercent: l.gstPercent || 18 })) })
+      if (target.noTax) patch({ docType, number: '', items: inv.items.map((l) => ({ ...l, gstPercent: 0 })) })
+      else patch({ docType, number: '', items: inv.items.map((l) => ({ ...l, gstPercent: l.gstPercent })) })
     } else {
       patch({ docType, number: '' })
     }
@@ -175,10 +176,12 @@ export function BillingScreen({
   const paidAmount = round2(Number(paidInput) || 0)
 
   const doSave = async (after?: 'print' | 'share' | 'view') => {
+    if (savingRef.current) return
     if (!inv.items.length) {
       toast('Pehle ek item jodein', 'error')
       return
     }
+    savingRef.current = true
     setSaving(true)
     try {
       const payments =
@@ -205,6 +208,7 @@ export function BillingScreen({
       console.error(e)
       toast(e instanceof Error && e.message.trim() ? e.message : 'Save nahi hua — dobara koshish karein', 'error')
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -316,7 +320,7 @@ export function BillingScreen({
                     <button className="min-w-0 flex-1 text-left" onClick={() => setEditLine(l)}>
                       <div className="truncate text-[13px] font-semibold text-slate-900">{l.name}</div>
                       <div className="truncate text-[11px] text-slate-500">
-                        {num(l.qty, 0)} {l.unit} × {num(l.rate)}
+                        {quantity(l.qty)} {l.unit} × {num(l.rate)}
                         {l.discountPercent ? ` − ${num(l.discountPercent, 0)}%` : ''}
                         {l.gstPercent ? ` + GST ${num(l.gstPercent, 0)}%` : ''}
                       </div>
@@ -325,7 +329,7 @@ export function BillingScreen({
                       <button className="qty-btn" onClick={() => bumpQty(l.id, -1)}>
                         −
                       </button>
-                      <span className="num w-8 text-center text-sm font-bold">{num(l.qty, 0)}</span>
+                      <span className="num w-8 text-center text-sm font-bold">{quantity(l.qty)}</span>
                       <button className="qty-btn" onClick={() => bumpQty(l.id, 1)}>
                         +
                       </button>
@@ -433,7 +437,7 @@ export function BillingScreen({
       <div className="sticky-total no-print">
         <div className="mb-2 flex items-end justify-between">
           <div className="text-[11px] font-semibold text-slate-500">
-            Qty {num(t.totalQty, 0)} • Taxable {money(t.taxableNet)} • GST {money(t.tax)}
+            Qty {quantity(t.totalQty)} • Taxable {money(t.taxableNet)} • GST {money(t.tax)}
           </div>
           <div className="text-right">
             <div className="text-[10px] font-bold uppercase text-slate-500">Grand total</div>
@@ -484,7 +488,7 @@ export function BillingScreen({
       />
       <BarcodeScanner open={scannerOpen} onClose={() => setScannerOpen(false)} onDetect={(c) => void scanAdd(c)} />
 
-      <LineEditor line={editLine} onClose={() => setEditLine(null)} onSave={saveLine} onDelete={removeLine} />
+      <LineEditor isPurchase={isPurchase} line={editLine} onClose={() => setEditLine(null)} onSave={saveLine} onDelete={removeLine} />
 
       <ChargesSheet
         open={chargesOpen}
@@ -676,14 +680,20 @@ export function BillingScreen({
   )
 }
 
+function invForValidation(line: LineItem): Invoice {
+  return { docType: 'TAX_INVOICE', number: '', date: todayISO(), partyName: '', placeOfSupply: '', items: [line], billDiscountType: 'AMOUNT', billDiscountValue: 0, extraCharges: [], roundOffEnabled: false, status: 'FINAL', payments: [], createdAt: 0, updatedAt: 0 }
+}
+
 // ---------------- Line editor ----------------
 
 function LineEditor({
+  isPurchase = false,
   line,
   onClose,
   onSave,
   onDelete,
 }: {
+  isPurchase?: boolean
   line: LineItem | null
   onClose: () => void
   onSave: (l: LineItem) => void
@@ -700,6 +710,7 @@ function LineEditor({
   const tax = round2(taxable * (draft.gstPercent / 100))
 
   const linkItem = (itemId: number) => {
+    if (!itemId) { setDraft({ ...draft, itemId: undefined }); return }
     const it = items.find((i) => i.id === itemId)
     if (!it) return
     setDraft({
@@ -711,8 +722,8 @@ function LineEditor({
       brand: it.brand,
       hsn: it.hsn,
       unit: it.unit,
-      rate: it.mrp,
-      discountPercent: it.discountPercent,
+      rate: isPurchase ? it.purchasePrice || it.mrp : it.mrp,
+      discountPercent: isPurchase ? 0 : it.discountPercent,
       gstPercent: it.gstPercent,
       costPrice: it.purchasePrice,
       qty: draft.qty,
@@ -730,7 +741,10 @@ function LineEditor({
           <button className="btn btn-danger-soft" onClick={() => onDelete(draft.id)}>
             🗑
           </button>
-          <button className="btn btn-primary flex-1" onClick={() => onSave(draft)}>
+          <button className="btn btn-primary flex-1" onClick={() => {
+            try { validateInvoice({ ...invForValidation(draft) }); onSave(draft) }
+            catch (e) { toast(e instanceof Error ? e.message : 'Invalid line', 'error') }
+          }}>
             Line update karein
           </button>
         </div>

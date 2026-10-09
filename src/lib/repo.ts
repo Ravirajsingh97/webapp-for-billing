@@ -1,3 +1,4 @@
+import { initializeInventory, reconcileInventory, roundStock } from './inventory'
 import { mergeSnapshot } from './sync'
 import type { Table } from 'dexie'
 import { SYNC_TABLES, detachMissingReferences, normalizeTombstone, newSyncId, recordIdentity, tombstoneKey, type SyncTableName, type SyncRow } from './syncIdentity'
@@ -49,28 +50,49 @@ async function allocateNumber(docType: DocType, date: string): Promise<string> {
 
 export const listItems = () => db.items.orderBy('name').toArray()
 
+const nextStamp = (previous = 0) => Math.max(Date.now(), previous + 1)
+const staleMessage = 'Ye record doosre tab/device par badal gaya hai. Band karke dobara kholein; aapke changes save nahi hue.'
+const validNumber = (n: number, label: string, minimum = 0): void => {
+  if (!Number.isFinite(n) || n < minimum) throw new Error(`${label}: valid amount/quantity likhein`)
+}
+
 export async function upsertItem(item: Item): Promise<number> {
-  const previous = item.id ? await db.items.get(item.id) : undefined
-  const rec = { ...item, syncId: previous?.syncId ?? item.syncId, updatedAt: Date.now() }
-  if (rec.id) {
-    await db.items.put(rec)
-    return rec.id
-  }
-  const { id: _drop, ...rest } = rec
-  void _drop
-  return db.items.add(rest as Item)
+  for (const [label, value] of Object.entries({ MRP: item.mrp, Discount: item.discountPercent, GST: item.gstPercent, Cost: item.purchasePrice, Alert: item.lowStockAlert })) validNumber(value, label)
+  validNumber(item.stockQty, 'Stock', -Infinity)
+  if (item.discountPercent > 100 || item.gstPercent > 100) throw new Error('Percentage 0–100 honi chahiye')
+  return db.transaction('rw', db.items, db.invoices, async () => {
+    const previous = item.id ? await db.items.get(item.id) : undefined
+    if (item.id && !previous) throw new Error(staleMessage)
+    if (previous && item.updatedAt !== previous.updatedAt) throw new Error(staleMessage)
+    await reconcileInventory(db)
+    const current = item.id ? await db.items.get(item.id) : undefined
+    const rec: Item = { ...item, isPlaceholder: false, syncId: current?.syncId ?? item.syncId, updatedAt: nextStamp(current?.updatedAt) }
+    if (current) {
+      rec.stockOpening = current.stockOpening
+      rec.stockAdjustments = { ...current.stockAdjustments }
+      const delta = roundStock(item.stockQty - current.stockQty)
+      if (delta) rec.stockAdjustments[newSyncId()] = delta
+      await db.items.put(rec)
+      return current.id!
+    }
+    rec.stockOpening = item.stockQty
+    rec.stockAdjustments = {}
+    const { id: _drop, ...rest } = rec
+    void _drop
+    return db.items.add(rest as Item)
+  })
 }
 
 export const deleteItem = (id: number): Promise<void> => deleteRecord('items', id)
 
 export async function adjustStock(itemId: number, delta: number): Promise<void> {
-  await db.transaction('rw', db.items, async () => {
+  validNumber(delta, 'Stock adjustment', -Infinity)
+  await db.transaction('rw', db.items, db.invoices, async () => {
+    await reconcileInventory(db)
     const item = await db.items.get(itemId)
-    if (!item?.id) return
-    await db.items.update(item.id, {
-      stockQty: Math.max(0, (item.stockQty || 0) + delta),
-      updatedAt: Date.now(),
-    })
+    if (!item) return
+    await db.items.update(itemId, { stockAdjustments: { ...item.stockAdjustments, [newSyncId()]: delta }, updatedAt: nextStamp(item.updatedAt) })
+    await reconcileInventory(db)
   })
 }
 
@@ -156,29 +178,37 @@ export async function allBalances(shopState = '08'): Promise<Map<number, number>
 
 // ---------------- Invoices ----------------
 
-async function applyStockEffect(inv: Invoice, direction: 1 | -1): Promise<void> {
-  if (inv.status !== 'FINAL') return
-  const meta = docMeta(inv.docType)
-  if (!meta.stockOut && !meta.stockIn) return
-  const sign = (meta.stockOut ? -1 : 1) * direction
+const validDate = (value: string): void => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Valid date likhein')
+  const date = new Date(`${value}T00:00:00Z`)
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error('Valid date likhein')
+}
+
+export function validateInvoice(inv: Invoice): void {
+  if (!inv.items?.length) throw new Error('Pehle ek item jodein')
+  validDate(inv.date)
   for (const line of inv.items) {
-    if (!line.itemId) continue
-    const item = await db.items.get(line.itemId)
-    if (!item?.id) continue
-    await db.items.update(item.id, {
-      stockQty: (item.stockQty || 0) + sign * line.qty,
-      updatedAt: Date.now(),
-    })
+    if (!line.name?.trim()) throw new Error('Item name likhein')
+    validNumber(line.qty, 'Qty', Number.MIN_VALUE)
+    for (const [label, value] of Object.entries({ Rate: line.rate, Discount: line.discountPercent, GST: line.gstPercent, Cost: line.costPrice })) validNumber(value, label)
+    if (line.discountPercent > 100 || line.gstPercent > 100) throw new Error('Percentage 0–100 honi chahiye')
   }
+  validNumber(inv.billDiscountValue, 'Bill discount')
+  if (inv.billDiscountType === 'PERCENT' && inv.billDiscountValue > 100) throw new Error('Discount 0–100 honi chahiye')
+  for (const charge of inv.extraCharges ?? []) validNumber(charge.amount, 'Extra charge')
+  for (const payment of inv.payments ?? []) { validNumber(payment.amount, 'Payment', Number.MIN_VALUE); validDate(payment.date) }
 }
 
 export async function saveInvoice(inv: Invoice, shopState = '08'): Promise<number> {
   void shopState
+  validateInvoice(inv)
   return db.transaction('rw', db.invoices, db.docSettings, db.items, async () => {
-    const now = Date.now()
     let id = inv.id
     const existing = id ? await db.invoices.get(id) : undefined
-    if (existing) await applyStockEffect(existing, -1)
+    if (id && !existing) throw new Error(staleMessage)
+    if (existing && existing.updatedAt !== inv.updatedAt) throw new Error(staleMessage)
+    const now = nextStamp(existing?.updatedAt)
+    await reconcileInventory(db)
 
     const number = inv.number?.trim() ? inv.number.trim() : await allocateNumber(inv.docType, inv.date)
     if (!existing || existing.number !== number || existing.docType !== inv.docType) {
@@ -203,11 +233,17 @@ export async function saveInvoice(inv: Invoice, shopState = '08'): Promise<numbe
     }
 
     const saved = await db.invoices.get(id)
-    if (saved) await applyStockEffect(saved, 1)
+    if (saved) await reconcileInventory(db)
 
     // link converted document
     if (inv.fromId) {
-      await db.invoices.update(inv.fromId, { convertedToId: id, updatedAt: now })
+      const source = await db.invoices.get(inv.fromId)
+      if (!source || source.status !== 'FINAL') throw new Error('Source bill active nahi hai')
+      if (source.docType === 'DELIVERY_CHALLAN' && inv.docType === 'TAX_INVOICE') {
+        const conversions = await db.invoices.filter(i => i.fromId === inv.fromId && i.docType === 'TAX_INVOICE' && i.status === 'FINAL' && i.id !== id).count()
+        if (conversions) throw new Error('Is challan ka invoice pehle se hai')
+      }
+      await db.invoices.update(inv.fromId, { convertedToId: id, updatedAt: nextStamp(source.updatedAt) })
     }
     return id
   })
@@ -215,49 +251,58 @@ export async function saveInvoice(inv: Invoice, shopState = '08'): Promise<numbe
 
 export async function deleteInvoice(id: number): Promise<void> {
   await db.transaction('rw', db.invoices, db.items, db.tombstones, async () => {
-    const inv = await db.invoices.get(id)
-    if (inv) await applyStockEffect(inv, -1)
+    await reconcileInventory(db)
     await deleteRecord('invoices', id)
+    await reconcileInventory(db)
   })
 }
 
 export async function cancelInvoice(id: number): Promise<void> {
   await db.transaction('rw', db.invoices, db.items, async () => {
+    await reconcileInventory(db)
     const inv = await db.invoices.get(id)
-    if (!inv?.id) return
-    if (inv.status === 'FINAL') await applyStockEffect(inv, -1)
-    await db.invoices.update(id, { status: 'CANCELLED', updatedAt: Date.now() })
+    if (!inv) return
+    await db.invoices.update(id, { status: 'CANCELLED', updatedAt: nextStamp(inv.updatedAt) })
+    await reconcileInventory(db)
   })
 }
 
 export async function restoreInvoice(id: number): Promise<void> {
   await db.transaction('rw', db.invoices, db.items, async () => {
+    await reconcileInventory(db)
     const inv = await db.invoices.get(id)
-    if (!inv?.id) return
-    if (inv.status !== 'FINAL') await applyStockEffect({ ...inv, status: 'FINAL' }, 1)
-    await db.invoices.update(id, { status: 'FINAL', updatedAt: Date.now() })
+    if (!inv) return
+    if (inv.fromId && inv.docType === 'TAX_INVOICE') {
+      const source = await db.invoices.get(inv.fromId)
+      if (source?.docType === 'DELIVERY_CHALLAN') {
+        const duplicate = await db.invoices.filter(other => other.id !== id && other.fromId === inv.fromId && other.docType === 'TAX_INVOICE' && other.status === 'FINAL').count()
+        if (duplicate) throw new Error('Is challan ka invoice pehle se hai')
+      }
+    }
+    await db.invoices.update(id, { status: 'FINAL', updatedAt: nextStamp(inv.updatedAt) })
+    await reconcileInventory(db)
   })
 }
 
-export async function recordPayment(
-  invoiceId: number,
-  payment: Omit<PaymentEntry, 'id'>,
-): Promise<void> {
-  const inv = await db.invoices.get(invoiceId)
-  if (!inv) return
-  const entry: PaymentEntry = { ...payment, id: uid() }
-  await db.invoices.update(invoiceId, {
-    payments: [...(inv.payments ?? []), entry],
-    updatedAt: Date.now(),
+export async function recordPayment(invoiceId: number, payment: Omit<PaymentEntry, 'id'>): Promise<void> {
+  validNumber(payment.amount, 'Payment', Number.MIN_VALUE)
+  validDate(payment.date)
+  await db.transaction('rw', db.invoices, async () => {
+    const inv = await db.invoices.get(invoiceId)
+    if (!inv || inv.status !== 'FINAL') throw new Error('Bill active nahi hai')
+    await db.invoices.update(invoiceId, { payments: [...(inv.payments ?? []), { ...payment, id: uid() }], updatedAt: nextStamp(inv.updatedAt) })
   })
 }
 
 export async function removePayment(invoiceId: number, paymentId: string): Promise<void> {
-  const inv = await db.invoices.get(invoiceId)
-  if (!inv) return
-  await db.invoices.update(invoiceId, {
-    payments: (inv.payments ?? []).filter((p) => p.id !== paymentId),
-    updatedAt: Date.now(),
+  await db.transaction('rw', db.invoices, async () => {
+    const inv = await db.invoices.get(invoiceId)
+    if (!inv) throw new Error('Bill nahi mila')
+    await db.invoices.update(invoiceId, {
+      payments: (inv.payments ?? []).filter(p => p.id !== paymentId),
+      removedPaymentIds: [...new Set([...(inv.removedPaymentIds ?? []), paymentId])],
+      updatedAt: nextStamp(inv.updatedAt),
+    })
   })
 }
 
@@ -341,6 +386,8 @@ export const listPayments = (): Promise<PartyPayment[]> =>
   db.payments.orderBy('date').reverse().toArray()
 
 export async function addPayment(p: Omit<PartyPayment, 'id'>): Promise<number> {
+  validNumber(p.amount, 'Payment', Number.MIN_VALUE)
+  validDate(p.date)
   const { id: _drop, ...rest } = p as PartyPayment
   void _drop
   return db.payments.add(rest as PartyPayment)
@@ -415,6 +462,8 @@ export async function paymentRegister(from: string, to: string): Promise<Payment
 export const listExpenses = (): Promise<Expense[]> => db.expenses.orderBy('date').reverse().toArray()
 
 export async function upsertExpense(e: Expense): Promise<number> {
+  validNumber(e.amount, 'Expense', Number.MIN_VALUE)
+  validDate(e.date)
   const previous = e.id ? await db.expenses.get(e.id) : undefined
   e = { ...e, syncId: previous?.syncId ?? e.syncId, updatedAt: Date.now() }
   if (e.id) {
@@ -442,115 +491,93 @@ export interface AgingReport {
   overduePayable: number
 }
 
-export async function agingReport(shopState = '08', today = todayISO()): Promise<AgingReport> {
-  const [invoices, parties, payments] = await Promise.all([
-    db.invoices.toArray(),
-    db.parties.toArray(),
-    db.payments.toArray(),
-  ])
-  const partyMap = new Map(parties.map((p) => [p.id!, p]))
-  const recv = new Map<string, AgingBucket>()
-  const pay = new Map<string, AgingBucket>()
-
-  const blank = (name: string, phone?: string): AgingBucket => ({
-    partyName: name,
-    phone,
-    d0_30: 0,
-    d31_60: 0,
-    d61_90: 0,
-    d90plus: 0,
-    total: 0,
-    oldestDays: 0,
-  })
-
-  for (const inv of invoices) {
-    if (inv.status !== 'FINAL') continue
-    const meta = docMeta(inv.docType)
-    if (!meta.isSale && !meta.isPurchase) continue
-    const t = computeTotals(inv, shopState)
-    const due = t.due
-    if (due <= 0.5 && !meta.isSale) continue
-    if (inv.docType === 'CREDIT_NOTE') continue
-    const amount = Math.max(0, round2(due))
-    if (amount <= 0) continue
-    const name = inv.partyName || 'Cash Sale'
-    const target = meta.isPurchase ? pay : recv
-    const key = inv.partyId ? String(inv.partyId) : `name:${name}`
-    const row = target.get(key) ?? blank(name, partyMap.get(inv.partyId ?? -1)?.phone)
-    const age = Math.max(0, daysBetween(inv.date, today))
-    if (age <= 30) row.d0_30 = round2(row.d0_30 + amount)
-    else if (age <= 60) row.d31_60 = round2(row.d31_60 + amount)
-    else if (age <= 90) row.d61_90 = round2(row.d61_90 + amount)
-    else row.d90plus = round2(row.d90plus + amount)
-    row.total = round2(row.total + amount)
-    row.oldestDays = Math.max(row.oldestDays, age)
-    row.partyId = inv.partyId
-    target.set(key, row)
-  }
-
-  // on-account (standalone) payments kam karein — sabse purane bill se pehle
-  const reduceBuckets = (row: AgingBucket, amount: number) => {
-    let left = amount
-    const order: (keyof AgingBucket)[] = ['d90plus', 'd61_90', 'd31_60', 'd0_30']
-    for (const key of order) {
-      if (left <= 0) break
-      const val = row[key] as number
-      const take = Math.min(val, left)
-      ;(row[key] as number) = round2(val - take)
-      left = round2(left - take)
+/** Shared ledger including cash/unlinked parties; each obligation has a signed amount. */
+async function ledgerEntries(shopState: string, asOf = '9999-12-31') {
+  const [invoices, parties, payments] = await Promise.all([db.invoices.toArray(), db.parties.toArray(), db.payments.toArray()])
+  const groups = new Map<string, { partyId?: number; partyName: string; phone?: string; type: 'CUSTOMER' | 'SUPPLIER'; entries: { amount: number; date?: string }[] }>()
+  const partyMap = new Map(parties.map(p => [p.id, p]))
+  const get = (partyId: number | undefined, name: string, supplier = false) => {
+    const key = partyId ? `id:${partyId}` : `name:${name || 'Cash Sale'}`
+    let group = groups.get(key)
+    if (!group) {
+      const p = partyMap.get(partyId)
+      group = { partyId, partyName: p?.name || name || 'Cash Sale', phone: p?.phone, type: p?.type ?? (supplier ? 'SUPPLIER' : 'CUSTOMER'), entries: [] }
+      groups.set(key, group)
     }
-    row.total = round2(row.d0_30 + row.d31_60 + row.d61_90 + row.d90plus)
+    return group
   }
+  for (const party of parties) get(party.id, party.name, party.type === 'SUPPLIER').entries.push({ amount: party.openingBalance || 0 })
+  for (const inv of invoices) {
+    if (inv.status !== 'FINAL' || inv.date > asOf) continue
+    const meta = docMeta(inv.docType)
+    if (!meta.isSale && !meta.isPurchase && !meta.negative) continue
+    // Only payments already made at the requested date reduce this obligation.
+    const t = computeTotals({ ...inv, payments: (inv.payments ?? []).filter(p => (p.date || inv.date) <= asOf) }, shopState)
+    get(inv.partyId, inv.partyName, meta.isPurchase).entries.push({ amount: (meta.isPurchase || meta.negative ? -1 : 1) * t.due, date: inv.date })
+  }
+  for (const payment of payments) {
+    if (payment.date <= asOf) get(payment.partyId, payment.partyName, payment.direction === 'OUT').entries.push({ amount: payment.direction === 'IN' ? -payment.amount : payment.amount, date: payment.date })
+  }
+  return [...groups.values()]
+}
 
-  const partyKey = (p: { partyId?: number; partyName: string }) =>
-    p.partyId ? String(p.partyId) : `name:${p.partyName}`
-  const paidIn = new Map<string, number>()
-  const paidOut = new Map<string, number>()
-  payments.forEach((p) => {
-    const key = partyKey({ partyId: p.partyId, partyName: p.partyName })
-    if (p.direction === 'IN') paidIn.set(key, round2((paidIn.get(key) ?? 0) + p.amount))
-    else paidOut.set(key, round2((paidOut.get(key) ?? 0) + p.amount))
-  })
-  recv.forEach((row, key) => {
-    const credit = round2((paidIn.get(key) ?? 0) - (paidOut.get(key) ?? 0))
-    if (credit > 0) reduceBuckets(row, credit)
-  })
-  pay.forEach((row, key) => {
-    const paid = round2((paidOut.get(key) ?? 0) - (paidIn.get(key) ?? 0))
-    if (paid > 0) reduceBuckets(row, paid)
-  })
+export async function balanceSummary(shopState = '08'): Promise<{ receivable: number; payable: number }> {
+  let receivable = 0, payable = 0
+  for (const group of await ledgerEntries(shopState)) {
+    const balance = round2(group.entries.reduce((s, entry) => s + entry.amount, 0))
+    if (group.type === 'CUSTOMER') receivable += Math.max(0, balance)
+    else payable += Math.max(0, -balance)
+  }
+  return { receivable: round2(receivable), payable: round2(payable) }
+}
 
-  const receivables = [...recv.values()]
-    .filter((r) => r.total > 0.5)
-    .sort((a, b) => b.total - a.total)
-  const payables = [...pay.values()]
-    .filter((r) => r.total > 0.5)
-    .sort((a, b) => b.total - a.total)
+export async function agingReport(shopState = '08', today = todayISO()): Promise<AgingReport> {
+  const receivables: AgingBucket[] = [], payables: AgingBucket[] = []
+  for (const group of await ledgerEntries(shopState, today)) {
+    const sign = group.type === 'SUPPLIER' ? -1 : 1
+    const row: AgingBucket = { partyId: group.partyId, partyName: group.partyName, phone: group.phone, d0_30: 0, d31_60: 0, d61_90: 0, d90plus: 0, total: 0, oldestDays: 0 }
+    let credit = 0
+    const dated: { amount: number; age: number }[] = []
+    for (const entry of group.entries) {
+      const amount = round2(sign * entry.amount)
+      if (amount < 0) { credit -= amount; continue }
+      // Opening balances have no historical due date: conservatively age them at 90+.
+      if (amount > 0) dated.push({ amount, age: entry.date ? Math.max(0, daysBetween(entry.date, today)) : 91 })
+    }
+    for (const entry of dated.sort((a, b) => b.age - a.age)) {
+      const offset = Math.min(credit, entry.amount)
+      credit = round2(credit - offset)
+      const amount = round2(entry.amount - offset)
+      if (!amount) continue
+      const key = entry.age <= 30 ? 'd0_30' : entry.age <= 60 ? 'd31_60' : entry.age <= 90 ? 'd61_90' : 'd90plus'
+      row[key] = round2(row[key] + amount)
+      row.total = round2(row.total + amount)
+      row.oldestDays = Math.max(row.oldestDays, entry.age)
+    }
+    if (row.total > 0.5) (sign > 0 ? receivables : payables).push(row)
+  }
+  for (const rows of [receivables, payables]) rows.sort((a, b) => b.total - a.total)
   const sum = (rows: AgingBucket[]) => round2(rows.reduce((s, r) => s + r.total, 0))
-  return {
-    receivables,
-    payables,
-    totalReceivable: sum(receivables),
-    totalPayable: sum(payables),
-    overdueReceivable: round2(receivables.reduce((s, r) => s + r.d31_60 + r.d61_90 + r.d90plus, 0)),
-    overduePayable: round2(payables.reduce((s, r) => s + r.d31_60 + r.d61_90 + r.d90plus, 0)),
-  }
+  const overdue = (rows: AgingBucket[]) => round2(rows.reduce((s, r) => s + r.d31_60 + r.d61_90 + r.d90plus, 0))
+  return { receivables, payables, totalReceivable: sum(receivables), totalPayable: sum(payables), overdueReceivable: overdue(receivables), overduePayable: overdue(payables) }
 }
 
 /** Purchase bill ke rate se item ka purchase price update karein */
 export async function applyPurchaseRates(inv: Invoice): Promise<number> {
-  let updated = 0
-  for (const line of inv.items) {
-    if (!line.itemId) continue
-    const item = await db.items.get(line.itemId)
-    if (!item?.id) continue
-    const newCost = round2(line.rate * (1 - (line.discountPercent || 0) / 100))
-    if (newCost > 0 && Math.abs((item.purchasePrice || 0) - newCost) > 0.01) {
-      await db.items.update(item.id, { purchasePrice: newCost, updatedAt: Date.now() })
-      updated++
+  return db.transaction('rw', db.items, async () => {
+    let updated = 0
+    for (const line of inv.items) {
+      if (!line.itemId) continue
+      const item = await db.items.get(line.itemId)
+      if (!item?.id) continue
+      const newCost = round2(line.rate * (1 - (line.discountPercent || 0) / 100))
+      if (newCost > 0 && Math.abs((item.purchasePrice || 0) - newCost) > 0.01) {
+        await db.items.update(item.id, { purchasePrice: newCost, updatedAt: nextStamp(item.updatedAt) })
+        updated++
+      }
     }
-  }
-  return updated
+    return updated
+  })
 }
 
 // ---------------- Backup ----------------
@@ -577,6 +604,7 @@ export async function exportBackup(): Promise<string> {
     const data: Record<string, unknown> = { app: 'showroom-manager', version: 3, exportedAt: new Date().toISOString() }
     for (const name of SYNC_TABLES) data[name] = await syncTable(name).toArray()
     data.tombstones = await db.tombstones.toArray()
+    initializeInventory(data.items as Item[], data.invoices as Invoice[])
     detachMissingReferences(data)
     return JSON.stringify(data, null, 2)
   })
@@ -592,6 +620,7 @@ export async function importBackup(json: string, mode: 'replace' | 'merge' = 'me
       throw new Error(`Invalid backup table: ${name}`)
     }
   }
+  initializeInventory(data.items, data.invoices)
   const markers = (data.tombstones ?? []).map(normalizeTombstone)
   await db.transaction('rw', [...SYNC_TABLES.map(syncTable), db.tombstones], async () => {
     if (mode === 'merge') {
@@ -637,6 +666,7 @@ export async function importBackup(json: string, mode: 'replace' | 'merge' = 'me
         // Explicitly recovered rows have a new identity; retain old tombstones for stale devices.
       }
     }
+    await reconcileInventory(db)
   })
 }
 

@@ -167,7 +167,7 @@ export function parseItemsCsv(text: string): ParsedItems {
       discountPercent: round2(toNum(get('discountPercent'))),
       gstPercent: get('gstPercent') ? round2(toNum(get('gstPercent'))) : 18,
       purchasePrice: round2(toNum(get('purchasePrice'))),
-      stockQty: Math.round(toNum(get('stockQty'), 0)),
+      stockQty: Math.round(toNum(get('stockQty'), 0) * 1_000_000) / 1_000_000,
       lowStockAlert: Math.round(toNum(get('lowStockAlert'), 5)),
       notes: get('notes'),
       updatedAt: Date.now(),

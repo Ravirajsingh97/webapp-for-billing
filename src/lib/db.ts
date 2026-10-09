@@ -133,10 +133,13 @@ const SAMPLE_ITEMS: Omit<Item, 'id'>[] = [
     gstPercent,
     purchasePrice,
     stockQty,
+    isPlaceholder: true,
+    stockOpening: stockQty,
+    syncId: `seed:${code}`,
     lowStockAlert: 5,
     barcode: '',
     notes: '',
-    updatedAt: Date.now(),
+    updatedAt: 0,
   } satisfies Omit<Item, 'id'>
 })
 
@@ -144,7 +147,7 @@ export async function seedDatabase(): Promise<void> {
   await db.open()
   const company = activeCompany()
   const businessCount = await db.business.count()
-  if (businessCount === 0) await db.business.add({ ...DEFAULT_BUSINESS, name: company.name, updatedAt: Date.now() })
+  if (businessCount === 0) await db.business.add({ ...DEFAULT_BUSINESS, name: company.name, isPlaceholder: true, updatedAt: 0 })
 
   // make sure every document type has a number series (also adds newly introduced types)
   for (const def of DEFAULT_DOC_SETTINGS) {

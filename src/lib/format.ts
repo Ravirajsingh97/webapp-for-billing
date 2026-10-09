@@ -3,6 +3,8 @@
 const inr0 = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 })
 const inr2 = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+export const quantity = (n: number): string => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 6 }).format(Number.isFinite(n) ? n : 0)
+
 /** 12500.5 → ₹12,500.50 */
 export const money = (n: number, decimals = 2): string => {
   const v = Number.isFinite(n) ? n : 0

@@ -312,21 +312,26 @@ export async function fsGet(path: string): Promise<Record<string, unknown> | nul
   const token = await freshToken()
   const res = await fetch(`${base(cfg)}/${path}`, { headers: { Authorization: `Bearer ${token}` } })
   if (res.status === 404) return null
-  const json = (await res.json().catch(() => ({}))) as { fields?: Record<string, FsValue>; error?: { message?: string } }
+  const json = (await res.json().catch(() => ({}))) as { updateTime?: string; fields?: Record<string, FsValue>; error?: { message?: string } }
   if (!res.ok) {
     const code = (json.error?.message ?? 'FIRESTORE_ERROR').split(' ')[0]
     throw new CloudError(code, 'Cloud me data save nahi ho paya — Firestore rules check karein')
   }
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(json.fields ?? {})) out[k] = fromFs(v)
+  if (json.updateTime) out.__updateTime = json.updateTime
   return out
 }
 
 /** Document likho (na ho to ban jata hai) */
-export async function fsSet(path: string, data: Record<string, unknown>): Promise<void> {
+export async function fsSet(path: string, data: Record<string, unknown>, expectedUpdateTime?: string | null): Promise<void> {
   const cfg = requireConfig()
   const token = await freshToken()
-  const res = await fetch(`${base(cfg)}/${path}`, {
+  const params = new URLSearchParams()
+  if (expectedUpdateTime === null) params.set('currentDocument.exists', 'false')
+  else if (expectedUpdateTime !== undefined) params.set('currentDocument.updateTime', expectedUpdateTime)
+  const query = params.size ? `?${params}` : ''
+  const res = await fetch(`${base(cfg)}/${path}${query}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ fields: encodeFields(data) }),
@@ -334,6 +339,7 @@ export async function fsSet(path: string, data: Record<string, unknown>): Promis
   if (!res.ok) {
     const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
     const code = (json.error?.message ?? 'FIRESTORE_ERROR').split(' ')[0]
+    if (res.status === 409 || res.status === 412 || code === 'FAILED_PRECONDITION' || code === 'ALREADY_EXISTS') throw new CloudError('SYNC_CONFLICT', 'Cloud data doosre device par badal gaya; dobara sync karein')
     throw new CloudError(code, 'Cloud me data save nahi ho paya — Firestore rules check karein')
   }
 }
@@ -350,10 +356,18 @@ export interface RemoteCompanyDoc {
   payload: string
   updatedAt: number
   updatedBy: string
+  updateTime?: string
 }
 
 const userPath = (uid: string) => `showroomUsers/${uid}`
 const companyPath = (uid: string, companyId: string) => `showroomUsers/${uid}/companies/${companyId}`
+
+export async function remoteGetRegistry(uid: string): Promise<{ companies: RemoteCompany[]; updateTime?: string } | null> {
+  const doc = await fsGet(userPath(uid))
+  if (!doc) return null
+  const companies = Array.isArray(doc.companies) ? (doc.companies as RemoteCompany[]).filter(c => c && typeof c.id === 'string') : []
+  return { companies, updateTime: typeof doc.__updateTime === 'string' ? doc.__updateTime : undefined }
+}
 
 export async function remoteGetCompanies(uid: string): Promise<RemoteCompany[] | null> {
   const doc = await fsGet(userPath(uid))
@@ -363,8 +377,8 @@ export async function remoteGetCompanies(uid: string): Promise<RemoteCompany[] |
   return (list as RemoteCompany[]).filter((c) => c && typeof c.id === 'string')
 }
 
-export async function remoteSetCompanies(uid: string, companies: RemoteCompany[]): Promise<void> {
-  await fsSet(userPath(uid), { companies, updatedAt: Date.now(), updatedBy: uid })
+export async function remoteSetCompanies(uid: string, companies: RemoteCompany[], expectedUpdateTime?: string | null): Promise<void> {
+  await fsSet(userPath(uid), { companies, updatedAt: Date.now(), updatedBy: uid }, expectedUpdateTime)
 }
 
 export async function remoteGetCompany(uid: string, companyId: string): Promise<RemoteCompanyDoc | null> {
@@ -387,15 +401,15 @@ export async function remoteGetCompany(uid: string, companyId: string): Promise<
     }
     payload = parts.join('')
   }
-  return { payload, updatedAt: Number(doc.updatedAt ?? 0), updatedBy: String(doc.updatedBy ?? '') }
+  return { payload, updatedAt: Number(doc.updatedAt ?? 0), updatedBy: String(doc.updatedBy ?? ''), updateTime: typeof doc.__updateTime === 'string' ? doc.__updateTime : undefined }
 }
 
-export async function remoteSetCompany(uid: string, companyId: string, payload: string): Promise<void> {
+export async function remoteSetCompany(uid: string, companyId: string, payload: string, expectedUpdateTime?: string | null): Promise<void> {
   const path = companyPath(uid, companyId)
   // 100k UTF-16 units remain below 1 MiB even with worst-case JSON escaping.
   const chunkSize = 100_000
   if (payload.length <= chunkSize) {
-    await fsSet(path, { payload, updatedAt: Date.now(), updatedBy: uid })
+    await fsSet(path, { payload, updatedAt: Date.now(), updatedBy: uid }, expectedUpdateTime)
     return
   }
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload))
@@ -414,5 +428,5 @@ export async function remoteSetCompany(uid: string, companyId: string, payload: 
     await fsSet(`${path}/snapshots/${generation}/chunks/${i}`, { payload: parts[i] })
   }
   // Publish only after every immutable chunk is written. A failed upload leaves the old manifest valid.
-  await fsSet(path, { generation, chunks, updatedAt: Date.now(), updatedBy: uid })
+  await fsSet(path, { generation, chunks, updatedAt: Date.now(), updatedBy: uid }, expectedUpdateTime)
 }

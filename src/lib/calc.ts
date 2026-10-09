@@ -46,9 +46,18 @@ export const computeTotals = (
     }
   }
 
-  lines.forEach((l) => {
-    const share = taxable > 0 ? round2(billDiscount * (l.taxable / taxable)) : 0
-    l.taxableAfterBillDiscount = round2(l.taxable - share)
+  const discountPaise = Math.round(billDiscount * 100)
+  const shares = lines.map(l => taxable > 0 ? discountPaise * l.taxable / taxable : 0)
+  const allocated = shares.map(Math.floor)
+  let remainder = discountPaise - allocated.reduce((s, n) => s + n, 0)
+  const order = shares.map((n, i) => ({ i, fraction: n - allocated[i] })).sort((a, b) => b.fraction - a.fraction || a.i - b.i)
+  for (const { i } of order) {
+    if (remainder <= 0) break
+    allocated[i]++
+    remainder--
+  }
+  lines.forEach((l, i) => {
+    l.taxableAfterBillDiscount = round2(l.taxable - allocated[i] / 100)
     l.tax = round2((l.taxableAfterBillDiscount * l.gstPercent) / 100)
     l.total = round2(l.taxableAfterBillDiscount + l.tax)
   })
@@ -160,12 +169,13 @@ export const hsnSummary = (inv: Invoice, t: InvoiceTotals) => {
   const map = new Map<string, { hsn: string; qty: number; taxable: number; tax: number; rate: number }>()
   inv.items.forEach((l, i) => {
     const hsn = l.hsn?.trim() || '-'
-    const row = map.get(hsn) ?? { hsn, qty: 0, taxable: 0, tax: 0, rate: l.gstPercent }
+    const key = `${hsn}|${l.gstPercent}`
+    const row = map.get(key) ?? { hsn, qty: 0, taxable: 0, tax: 0, rate: l.gstPercent }
     row.qty += l.qty
     row.taxable = round2(row.taxable + (t.lines[i]?.taxableAfterBillDiscount ?? 0))
     row.tax = round2(row.tax + (t.lines[i]?.tax ?? 0))
     row.rate = l.gstPercent
-    map.set(hsn, row)
+    map.set(key, row)
   })
   return [...map.values()].sort((a, b) => b.taxable - a.taxable)
 }

@@ -15,7 +15,7 @@ export function Onboarding({ business, onDone }: { business: Business; onDone: (
     }
     const stateName = STATES.find((s) => s.code === form.stateCode)?.name ?? ''
     const existing = (await db.business.toCollection().first())?.id
-    const rec = { ...form, updatedAt: Date.now(), name: form.name.trim(), stateName }
+    const rec = { ...form, isPlaceholder: false, updatedAt: Date.now(), name: form.name.trim(), stateName }
     if (existing) await db.business.update(existing, rec)
     else await db.business.add(rec)
     await setSetting('onboarded', 'yes')

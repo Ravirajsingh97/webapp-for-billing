@@ -146,6 +146,7 @@ export const PAYMENT_MODES: { key: PaymentMode; label: string; hi: string }[] = 
 ]
 
 export interface Business extends SyncRecord {
+  isPlaceholder?: boolean
   id?: number
   name: string
   tagline?: string
@@ -171,6 +172,7 @@ export interface SyncRecord {
 }
 
 export interface Item extends SyncRecord {
+  isPlaceholder?: boolean
   id?: number
   name: string
   code: string
@@ -185,6 +187,8 @@ export interface Item extends SyncRecord {
   gstPercent: number
   purchasePrice: number
   stockQty: number
+  stockOpening?: number
+  stockAdjustments?: Record<string, number>
   lowStockAlert: number
   notes?: string
   updatedAt: number
@@ -262,6 +266,7 @@ export interface Invoice extends SyncRecord {
   terms?: string
   status: 'FINAL' | 'CANCELLED'
   payments: PaymentEntry[]
+  removedPaymentIds?: string[]
   /** Documents created from this one (e.g. estimate → tax invoice) */
   convertedToId?: number
   /** Source document this was created from */

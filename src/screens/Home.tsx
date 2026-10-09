@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/db'
+import { balanceSummary, paymentRegister } from '../lib/repo'
 import { computeTotals, payStatus } from '../lib/calc'
 import { fmtDate, lastNDays, money, monthStart, monthEnd, num, round2, todayISO } from '../lib/format'
 import type { Business, DocType, Invoice } from '../lib/types'
@@ -33,6 +34,8 @@ export function HomeScreen({
   const expenses = useLiveQuery(() => db.expenses.toArray(), [])
 
   const today = todayISO()
+  const balances = useLiveQuery(() => balanceSummary(business.stateCode), [business.stateCode], { receivable: 0, payable: 0 })
+  const todayPayments = useLiveQuery(() => paymentRegister(today, today), [today], [])
   const month = { from: monthStart(), to: monthEnd() }
   const week = lastNDays(7)
 
@@ -40,8 +43,6 @@ export function HomeScreen({
     let todaySale = 0
     let monthSale = 0
     let weekSale = 0
-    let receivable = 0
-    let payable = 0
     let purchaseMonth = 0
     let expenseMonth = 0
     let cashToday = 0
@@ -58,21 +59,21 @@ export function HomeScreen({
         }
         if (inv.date >= month.from && inv.date <= month.to) monthSale += t.grandTotal
         if (inv.date >= week.from && inv.date <= week.to) weekSale += t.grandTotal
-        receivable += t.due
       } else if (meta.isPurchase) {
         if (inv.date >= month.from && inv.date <= month.to) purchaseMonth += t.grandTotal
-        payable += t.due
       } else if (meta.negative) {
         if (inv.date >= month.from && inv.date <= month.to) monthSale -= t.grandTotal
-        receivable -= t.due
       }
-      if (inv.date === today) {
-        inv.payments.forEach((p) => {
-          if (p.mode === 'CASH') cashToday += p.amount
-          if (p.mode === 'UPI') upiToday += p.amount
-        })
+      if (meta.negative) {
+        if (inv.date === today) todaySale -= t.grandTotal
+        if (inv.date >= week.from && inv.date <= week.to) weekSale -= t.grandTotal
       }
     })
+    for (const p of todayPayments) {
+      const sign = p.direction === 'OUT' ? -1 : 1
+      if (p.mode === 'CASH') cashToday += sign * p.amount
+      if (p.mode === 'UPI') upiToday += sign * p.amount
+    }
     ;(expenses ?? []).forEach((e) => {
       if (e.date >= month.from && e.date <= month.to) expenseMonth += e.amount
     })
@@ -83,8 +84,8 @@ export function HomeScreen({
       todaySale: round2(todaySale),
       monthSale: round2(monthSale),
       weekSale: round2(weekSale),
-      receivable: round2(receivable),
-      payable: round2(payable),
+      receivable: balances.receivable,
+      payable: balances.payable,
       purchaseMonth: round2(purchaseMonth),
       expenseMonth: round2(expenseMonth),
       cashToday: round2(cashToday),
@@ -94,7 +95,7 @@ export function HomeScreen({
       outOfStock: out.length,
       stockValue: round2(stockValue),
     }
-  }, [invoices, items, expenses, business.stateCode, today, month.from, month.to, week.from, week.to])
+  }, [invoices, items, expenses, balances, todayPayments, business.stateCode, today, month.from, month.to, week.from, week.to])
 
   const recent = (invoices ?? []).slice(0, 6)
   const dueInvoices = (invoices ?? [])

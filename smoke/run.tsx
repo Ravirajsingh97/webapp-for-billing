@@ -269,8 +269,8 @@ async function main() {
     `payable ${aging.totalPayable} = ${pTotals.grandTotal} - 300`,
   )
   check(
-    'aging: 0-30 bucket me sab (aaj ke bill)',
-    aging.receivables.every((r) => r.d61_90 === 0 && r.d90plus === 0),
+    'aging: opening balances age separately and bucket totals reconcile',
+    aging.receivables.every((r) => close(r.d0_30 + r.d31_60 + r.d61_90 + r.d90plus, r.total)),
     undefined,
   )
 
@@ -606,6 +606,10 @@ async function main() {
     // ---- chhota mock Firebase: Identity Toolkit + Firestore ----
     const docs = new Map<string, Record<string, unknown>>()
     let fetchCalls: string[] = []
+    const revisions = new Map<string, string>()
+    let revision = 0
+    let beforePatch: ((path: string) => void) | undefined
+    let conflicts = 0
     const enc = (v: unknown): Record<string, unknown> => {
       if (typeof v === 'string') return { stringValue: v }
       if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }
@@ -658,17 +662,25 @@ async function main() {
           return new Response(JSON.stringify({ error: { message: 'PERMISSION_DENIED' } }), { status: 403 })
         }
         if (method === 'PATCH') {
+          beforePatch?.(path)
+          const query = new URL(u).searchParams
+          const expected = query.get('currentDocument.updateTime')
+          if ((query.get('currentDocument.exists') === 'false' && docs.has(path)) || (expected !== null && expected !== (revisions.get(path) ?? 'initial'))) {
+            conflicts++
+            return new Response(JSON.stringify({ error: { message: 'FAILED_PRECONDITION' } }), { status: 409 })
+          }
           const fields = (body.fields ?? {}) as Record<string, unknown>
           const out: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(fields)) out[k] = dec(v)
           docs.set(path, out)
+          revisions.set(path, `revision-${++revision}`)
           return ok({ name: path })
         }
         const d = docs.get(path)
         if (!d) return new Response('{}', { status: 404 })
         const fields: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(d)) fields[k] = enc(v)
-        return ok({ fields })
+        return ok({ fields, updateTime: revisions.get(path) ?? 'initial' })
       }
       return new Response('{}', { status: 404 })
     }
@@ -777,6 +789,30 @@ async function main() {
     check('sync pull: naya data juda (purana gaya nahi)', countsAfter.items > before.items && countsAfter.parties > before.parties)
 
     check('sync: merge stats batate hain kitna juda', res2.added >= 3, `added=${res2.added} updated=${res2.updated}`)
+
+    const activeCloudPath = `showroomUsers/uid1/companies/${(await import('../src/lib/company')).activeCompanyId()}`
+    const beforeRace = conflicts
+    beforePatch = (path) => {
+      if (path !== activeCloudPath) return
+      beforePatch = undefined
+      const remoteData = JSON.parse(String(docs.get(path)!.payload))
+      remoteData.invoices.push({ ...remoteData.invoices[0], id: 900, syncId: 'racing-device-invoice', number: 'INV/RACE/1', payments: [], updatedAt: Date.now() })
+      docs.set(path, { ...docs.get(path), payload: JSON.stringify(remoteData) })
+      revisions.set(path, `revision-${++revision}`)
+    }
+    await sync.syncNow()
+    const publishedRace = JSON.parse(String(docs.get(activeCloudPath)!.payload))
+    check('sync: conflicting publish retries and preserves both devices bills', conflicts === beforeRace + 1 && publishedRace.invoices.some((i: any) => i.number === 'INV/RACE/1') && publishedRace.invoices.some((i: any) => i.number === 'INV/CLOUD/1') && !!(await db.invoices.toArray()).find(i => i.number === 'INV/RACE/1'))
+    check('sync: publication uses server revision precondition', fetchCalls.some(url => url.includes('currentDocument.updateTime=revision-')))
+    let creationConflict = false
+    try { await cloud.remoteSetCompany('uid1', (await import('../src/lib/company')).activeCompanyId(), await sync.buildSnapshot(), null) } catch (e) { creationConflict = e instanceof cloud.CloudError && e.code === 'SYNC_CONFLICT' }
+    check('sync: missing-document precondition cannot replace existing snapshot', creationConflict)
+    const attemptsBefore = conflicts
+    beforePatch = (path) => { if (path === activeCloudPath) revisions.set(path, `revision-${++revision}`) }
+    let exhausted = false
+    try { await sync.syncNow() } catch (e) { exhausted = e instanceof cloud.CloudError && e.code === 'SYNC_CONFLICT' }
+    beforePatch = undefined
+    check('sync: sustained conflicts stop after three publication attempts', exhausted && conflicts === attemptsBefore + 3)
 
     const beforeAuto = fetchCalls.length
     cloud.setAutoSync(true)

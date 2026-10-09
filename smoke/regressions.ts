@@ -10,6 +10,7 @@ import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { POSScreen } from '../src/screens/POS'
 import { suggestPurchaseLines } from '../src/lib/ocr'
+import { runSafetyRegressions } from './safety'
 import { BillingScreen } from '../src/screens/Billing'
 
 // Fixtures model complete cloud snapshots; individual tests override relevant tables.
@@ -32,7 +33,7 @@ export async function runRegressions(check: Check) {
   check('regression: CSV-style updates preserve sync identity', (await db.items.get(item.id!))?.syncId === item.syncId)
   const ocrLines = suggestPurchaseLines('Basin 2 500 1000\nTap 1 1,200.50 1,200.50\nGrand Total 3 500 1500\nWrong 2 500 900\nLoose text')
   check('OCR: suggests matching item rows, excludes totals and mismatched arithmetic', ocrLines.length === 2 && ocrLines[0].qty === 2 && ocrLines[1].rate === 1200.5 && !ocrLines[0].itemId && ocrLines[0].gstPercent === 0)
-  await repo.upsertItem({ ...item, mrp: 1000, discountPercent: 25, gstPercent: 18 })
+  await repo.upsertItem({ ...(await db.items.get(item.id!))!, mrp: 1000, discountPercent: 25, gstPercent: 18 })
   const posHost = document.createElement('div')
   document.body.appendChild(posHost)
   const posRoot = createRoot(posHost)
@@ -88,7 +89,7 @@ export async function runRegressions(check: Check) {
   check('POS: checkout updates catalogue stock once', (await db.items.get(item.id!))?.stockQty === stockBeforePOS - 2)
   posRoot.unmount(); posHost.remove()
   await repo.deleteInvoice(posSaved[0])
-  await repo.upsertItem(item)
+  await repo.upsertItem({ ...item, updatedAt: (await db.items.get(item.id!))!.updatedAt })
   const makeBill = async () => ({ ...await repo.newInvoice('TAX_INVOICE', '2026-09-01'), items: [lineFromItem(item, 2)] })
 
   // Two actual BillingScreen saves, with asynchronous number previews fully loaded.
@@ -111,7 +112,7 @@ export async function runRegressions(check: Check) {
   check('regression: explicit duplicate invoice number is rejected', await rejects(() => repo.saveInvoice({ ...first, id: undefined })))
   const duplicateFixture = await db.invoices.add({ ...first, id: undefined, syncId: 'legacy-duplicate-fixture' })
   check('regression: existing duplicate-number invoice remains editable', !await rejects(() => repo.saveInvoice({ ...first, notes: 'Legacy invoice edit' })))
-  await db.invoices.delete(duplicateFixture)
+  await repo.deleteInvoice(duplicateFixture)
   await repo.recordPayment(first.id!, { date: '2026-10-08', amount: 100, mode: 'CASH' })
   const october = await repo.paymentRegister('2026-10-08', '2026-10-08')
   const september = await repo.paymentRegister('2026-09-01', '2026-09-30')
@@ -243,6 +244,7 @@ export async function runRegressions(check: Check) {
   const special = 'comma,semicolon;tab\tquote"newline\n'
   check('regression: CSV delimiters round trip', parseCsvText(csvEscape(special))[0][0] === special)
   await testChunkedCloud(check)
+  await runSafetyRegressions(check)
 }
 
 async function testChunkedCloud(check: Check) {

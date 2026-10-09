@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/db'
+import { balanceSummary } from '../lib/repo'
 import { computeTotals } from '../lib/calc'
 import { lastNDays, money, monthStart, monthEnd, round2 } from '../lib/format'
 import type { Business, DocType, Invoice } from '../lib/types'
@@ -26,12 +27,11 @@ export function MoreScreen({
   const invoices = useLiveQuery(() => db.invoices.orderBy('createdAt').reverse().toArray(), [], [] as Invoice[])
   const items = useLiveQuery(() => db.items.toArray(), [])
 
+  const balances = useLiveQuery(() => balanceSummary(business.stateCode), [business.stateCode], { receivable: 0, payable: 0 })
   const week = lastNDays(7)
   const month = { from: monthStart(), to: monthEnd() }
 
   const stats = (() => {
-    let receivable = 0
-    let payable = 0
     let monthSale = 0
     let thisWeek = 0
     ;(invoices ?? []).forEach((inv) => {
@@ -39,19 +39,17 @@ export function MoreScreen({
       const meta = docMeta(inv.docType)
       const t = computeTotals(inv, business.stateCode)
       if (meta.isSale) {
-        receivable += t.due
         if (inv.date >= month.from && inv.date <= month.to) monthSale += t.grandTotal
         if (inv.date >= week.from && inv.date <= week.to) thisWeek += t.grandTotal
-      } else if (meta.isPurchase) {
-        payable += t.due
       } else if (meta.negative) {
-        receivable -= t.due
+        if (inv.date >= month.from && inv.date <= month.to) monthSale -= t.grandTotal
+        if (inv.date >= week.from && inv.date <= week.to) thisWeek -= t.grandTotal
       }
     })
     const low = (items ?? []).filter((i) => i.stockQty <= i.lowStockAlert)
     return {
-      receivable: round2(receivable),
-      payable: round2(payable),
+      receivable: balances.receivable,
+      payable: balances.payable,
       monthSale: round2(monthSale),
       weekSale: round2(thisWeek),
       low: low.length,

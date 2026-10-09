@@ -306,3 +306,15 @@ Home / More → **POS** opens a searchable catalogue, barcode input, customer se
 Home / More → **Scan bill (OCR)** reads printed JPG/PNG/WebP bills locally with Tesseract.js. English and Hindi are supported; downloading the OCR engine/language requires internet (including for the single HTML build). PDFs and handwriting are not supported. Text stays editable. Only rows shaped like `Name Qty Rate Amount` with matching arithmetic become suggestions; GST starts at zero and must be checked. OCR never saves a bill automatically. Suggestions have no inventory link: replace them with catalogue items in the draft to update stock. Retained OCR source text appears in bill notes; edit/remove it before printing as needed.
 
 Layouts adapt from 320px phones through tablets to 1440px desktops, support landscape, keep forms readable, and use a split catalogue/cart on large screens. Camera barcode support depends on the browser; manual entry and keyboard scanners remain available. A4 and thermal printing retain their original paper sizes.
+
+## Payment, stock and sync safeguards
+
+Invoice and item editors reject stale saves after another tab/device changes the record. Close and reopen the editor to load the latest version before applying your edit. Payments are recorded atomically, merged by entry ID, and deleted using retained removal markers.
+
+Stock uses an opening quantity, uniquely identified manual adjustments, and the movements from active invoices. Independent offline sales and adjustments therefore survive sync without applying a movement twice. Fractional stock supports six decimal places. Legacy stock is initialized from the saved quantity and historic invoices; keep all syncing devices on this app version so older versions do not publish incompatible stock edits.
+
+A converted delivery challan and its tax invoice represent one delivery: the active tax invoice controls stock while the challan is suppressed. Cancelling/deleting the invoice returns responsibility to an active challan; cancelling both restores stock. A second active conversion is rejected. If you change delivery quantities after conversion, edit the active tax invoice.
+
+Home, More and aging use the party ledger, including opening balances, credit notes and standalone receipts/payments. Opening balances have no original transaction date and appear in the 90+ day bucket. Today's cash/UPI totals use payment dates and subtract outgoing payments. Discounts allocate exact paise; printed HSN summaries separate GST rates and purchase documents do not show the shop's collection QR.
+
+Cloud snapshot publication checks the Firestore server revision and retries a conflicting pull/merge/upload up to three times. A continuing conflict displays an error and can be retried. Regression coverage includes these conflicts using a synthetic Firestore server; real Firebase permissions/OAuth and physical printing still require deployment checks.

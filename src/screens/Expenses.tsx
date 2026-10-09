@@ -240,9 +240,11 @@ function ExpenseEditor({
       toast('Amount likhein', 'error')
       return
     }
-    await upsertExpense(draft)
-    toast('Kharcha save ho gaya', 'success')
-    onClose()
+    try {
+      await upsertExpense(draft)
+      toast('Kharcha save ho gaya', 'success')
+      onClose()
+    } catch (e) { toast(e instanceof Error ? e.message : 'Kharcha save nahi hua', 'error') }
   }
 
   return (

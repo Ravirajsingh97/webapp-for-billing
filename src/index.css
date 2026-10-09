@@ -479,3 +479,25 @@ button:focus-visible, a:focus-visible { outline: 3px solid #818cf8; outline-offs
     padding-inline: 0.35rem;
   }
 }
+
+/* Forms, action rows and sheets across mobile, tablet and desktop. */
+.segmented > button { min-height: 44px; }
+.search-action-row, .pos-layout form { min-width: 0; }
+.pos-layout form > input { flex: 1; min-width: 0; }
+.sheet { min-width: 0; }
+.sheet-head > .btn { flex-shrink: 0; }
+.action-grid > .col-span-full { grid-column: 1 / -1; }
+@media (max-width: 479px) {
+  .sheet-foot .btn, .sticky-total .btn { white-space: normal; }
+  .charge-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
+  .charge-row > .btn { grid-column: 1 / -1; }
+  .pos-layout { gap: 1rem; }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .sheet { max-width: 680px; }
+  .home-quick-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .form-page { width: 100%; }
+  .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

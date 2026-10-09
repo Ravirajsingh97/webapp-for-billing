@@ -175,13 +175,13 @@ export function InvoiceView({
           >
             📋 Copy bill text
           </button>
-          {t.due > 0.5 && business.upiId && !isPurchase ? (
-            <button className="btn btn-outline col-span-2" onClick={() => setQrOpen(true)}>
+          {t.due > 0.5 && business.upiId && meta.isSale ? (
+            <button className="btn btn-outline col-span-full" onClick={() => setQrOpen(true)}>
               📱 UPI QR dikhayein — {money(t.due)} lena hai
             </button>
           ) : null}
           {t.due > 0.5 ? (
-            <button className="btn btn-dark col-span-2" onClick={() => setPayOpen(true)}>
+            <button className="btn btn-dark col-span-full" onClick={() => setPayOpen(true)}>
               {isPurchase
                 ? `📤 Supplier ko payment karein (baaki ${money(t.due)})`
                 : `💰 Payment receive karein (baaki ${money(t.due)})`}
@@ -361,9 +361,11 @@ export function InvoiceView({
             <button
               className="btn btn-outline btn-block"
               onClick={async () => {
-                await restoreInvoice(invoice.id!)
-                setMoreOpen(false)
-                toast('Bill wapas active kar diya', 'success')
+                try {
+                  await restoreInvoice(invoice.id!)
+                  setMoreOpen(false)
+                  toast('Bill wapas active kar diya', 'success')
+                } catch (e) { toast(e instanceof Error ? e.message : 'Bill restore nahi hua', 'error') }
               }}
             >
               ♻️ Cancel hatayein
@@ -499,8 +501,9 @@ function PaymentSheet({
               return
             }
             setBusy(true)
-            await onSave(amt, mode, date, note.trim())
-            setBusy(false)
+            try { await onSave(amt, mode, date, note.trim()) }
+            catch (e) { toast(e instanceof Error ? e.message : 'Payment save nahi hua', 'error') }
+            finally { setBusy(false) }
           }}
         >
           {isPurchase ? '✅ Payment save karein (Out)' : '✅ Payment save karein'}

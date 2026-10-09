@@ -1,6 +1,6 @@
 import type { Business, DocType, Invoice, InvoiceTotals } from './types'
 import { docMeta } from './types'
-import { amountInWords, fmtDate, money, num, round2, todayISO } from './format'
+import { amountInWords, fmtDate, money, num, quantity, round2, todayISO } from './format'
 
 /** UPI deep link / QR payload for "Scan & Pay" */
 export const upiUri = (opts: {
@@ -49,7 +49,7 @@ export function invoiceText(inv: Invoice, biz: Business, t: InvoiceTotals): stri
   inv.items.forEach((l, i) => {
     lines.push(`${i + 1}. *${l.name}*`)
     lines.push(
-      `   ${num(l.qty, 0)} ${l.unit} × ${money(l.rate)}${l.discountPercent ? `  (-${num(l.discountPercent, 0)}%)` : ''} = *${money(t.lines[i]?.total ?? 0)}*`,
+      `   ${quantity(l.qty)} ${l.unit} × ${money(l.rate)}${l.discountPercent ? `  (-${num(l.discountPercent, 0)}%)` : ''} = *${money(t.lines[i]?.total ?? 0)}*`,
     )
   })
   lines.push('━━━━━━━━━━━━━━━━')
@@ -69,7 +69,7 @@ export function invoiceText(inv: Invoice, biz: Business, t: InvoiceTotals): stri
   lines.push(`_( ${amountInWords(t.grandTotal)} )_`)
   if (t.paid > 0) lines.push(`✅ Paid: ${money(t.paid)}`)
   if (t.due > 0.5) lines.push(`🔴 *Baki (Due): ${money(t.due)}*`)
-  if (t.due > 0.5 && biz.upiId) lines.push(`💳 UPI: ${biz.upiId}`)
+  if (t.due > 0.5 && docMeta(inv.docType).isSale && biz.upiId) lines.push(`💳 UPI: ${biz.upiId}`)
   if (inv.notes) lines.push(`📝 ${inv.notes}`)
   lines.push('')
   lines.push('Dhanyavaad! 🙏')

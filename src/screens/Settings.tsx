@@ -68,7 +68,7 @@ export function SettingsScreen({
     }
     const existing = (await db.business.toCollection().first())?.id
     const stateName = STATES.find((s) => s.code === form.stateCode)?.name ?? ''
-    const rec = { ...form, updatedAt: Date.now(), stateName }
+    const rec = { ...form, isPlaceholder: false, updatedAt: Date.now(), stateName }
     if (existing) await db.business.update(existing, rec)
     else await db.business.add(rec)
     setSavedTick(true)
@@ -104,7 +104,7 @@ export function SettingsScreen({
             <label className="label">Pura address</label>
             <textarea className="textarea" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="responsive-form-grid grid grid-cols-2 gap-3">
             <div className="field">
               <label className="label">Mobile number</label>
               <input className="input" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
@@ -154,7 +154,7 @@ export function SettingsScreen({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="responsive-form-grid grid grid-cols-2 gap-3">
             <div>
               <label className="label">Logo (bill par)</label>
               <input
@@ -488,7 +488,7 @@ function DocSettingSheet({ setting, onClose }: { setting: DocSetting | null; onC
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="responsive-form-grid grid grid-cols-2 gap-3">
           <div className="field">
             <label className="label">Prefix</label>
             <input className="input" value={draft.prefix} onChange={(e) => setDraft({ ...draft, prefix: e.target.value.toUpperCase() })} />

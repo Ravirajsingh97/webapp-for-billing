@@ -1,3 +1,5 @@
+import { initializeInventory, reconcileInventory } from './inventory'
+import type { Invoice, Item, PaymentEntry } from './types'
 import { SYNC_TABLES as TABLE_ORDER, detachMissingReferences, normalizeTombstone, naturalKey, recordIdentity, tombstoneKey, type SyncTableName, type Tombstone } from './syncIdentity'
 export { naturalKey } from './syncIdentity'
 export type { SyncTableName } from './syncIdentity'
@@ -23,7 +25,8 @@ import {
   freshToken,
   getSession,
   isCloudConfigured,
-  remoteGetCompanies,
+  remoteGetRegistry,
+  CloudError,
   remoteGetCompany,
   remoteSetCompanies,
   remoteSetCompany,
@@ -65,6 +68,7 @@ export async function buildSnapshot(dbx: ShowroomDB = db): Promise<string> {
     const out: Record<string, unknown> = { app: 'showroom-manager', version: 3 }
     for (const name of TABLE_ORDER) out[name] = await tableOf(dbx, name).toArray()
     out.tombstones = await dbx.tombstones.toArray()
+    initializeInventory(out.items as Item[], out.invoices as Invoice[])
     detachMissingReferences(out)
     return JSON.stringify(out)
   })
@@ -84,7 +88,9 @@ export async function mergeSnapshot(dbx: ShowroomDB, remoteJson: string): Promis
       throw new Error(`Invalid cloud table: ${name}`)
     }
   }
+  initializeInventory(data.items as Item[], data.invoices as Invoice[])
   return dbx.transaction('rw', [...TABLE_ORDER.map((name) => tableOf(dbx, name)), dbx.tombstones], async () => {
+    await reconcileInventory(dbx)
     for (const raw of (data.tombstones ?? []) as Tombstone[]) {
       const marker = normalizeTombstone(raw)
       const current = await dbx.tombstones.get(marker.key)
@@ -128,6 +134,7 @@ export async function mergeSnapshot(dbx: ShowroomDB, remoteJson: string): Promis
       const idMap = new Map<number, number | undefined>()
       remaps.set(name, idMap)
       const writes: Row[] = []
+      const localReferences = new Set<Row>()
       for (const raw of remoteRows) {
         if (isDeleted(name, raw)) {
           if (numeric) idMap.set(Number(raw.id), undefined) // Explicit deletion, not an unknown link.
@@ -139,16 +146,36 @@ export async function mergeSnapshot(dbx: ShowroomDB, remoteJson: string): Promis
         const candidate = byNatural.get(naturalKey(name, row))
         // Legacy snapshots have no stable identity; retain natural-key matching for migration.
         const legacy = (r: Row) => !r.syncId || String(r.syncId).startsWith('legacy:')
-        const existing = byIdentity.get(identity) ?? (candidate && (legacy(candidate) || legacy(row) || name === 'business' || !numeric) ? candidate : undefined)
+        const existing = byIdentity.get(identity) ?? (candidate && (legacy(candidate) || legacy(row) || candidate.isPlaceholder === true || row.isPlaceholder === true || name === 'business' || !numeric) ? candidate : undefined)
         if (existing) {
           if (numeric) idMap.set(Number(raw.id), Number(existing.id))
           // Counters must never move backwards, even if a legacy setting has no timestamp.
           const nextNumber = name === 'docSettings' ? Math.max(Number(row.nextNumber) || 1, Number(existing.nextNumber) || 1) : undefined
-          if (stamp(row) > stamp(existing) || (nextNumber !== undefined && nextNumber !== existing.nextNumber)) {
-            const merged = stamp(row) > stamp(existing) ? row : { ...existing }
-            if (numeric) merged.id = existing.id
-            if (existing.syncId) merged.syncId = existing.syncId
-            if (nextNumber !== undefined) merged.nextNumber = nextNumber
+          const preferRemote = name === 'business' || name === 'items'
+            ? (existing.isPlaceholder === true && row.isPlaceholder !== true) || (row.isPlaceholder !== true && stamp(row) > stamp(existing))
+            : stamp(row) > stamp(existing)
+          const merged: Row = structuredClone(preferRemote ? row : existing)
+          if (numeric) merged.id = existing.id
+          if (existing.syncId && !(existing.isPlaceholder === true && row.isPlaceholder !== true)) merged.syncId = existing.syncId
+          if (nextNumber !== undefined) merged.nextNumber = nextNumber
+          if (name === 'items') {
+            merged.stockOpening = existing.isPlaceholder === true && row.isPlaceholder !== true ? row.stockOpening : existing.stockOpening
+            merged.stockAdjustments = { ...(existing.stockAdjustments as object ?? {}), ...(row.stockAdjustments as object ?? {}) }
+          }
+          if (name === 'invoices') {
+            const removed = new Set([...(existing.removedPaymentIds as string[] ?? []), ...(row.removedPaymentIds as string[] ?? [])])
+            const payments = new Map<string, PaymentEntry>()
+            for (const payment of [...(existing.payments as PaymentEntry[] ?? []), ...(row.payments as PaymentEntry[] ?? [])]) {
+              if (!removed.has(payment.id)) payments.set(payment.id, payment)
+            }
+            merged.payments = [...payments.values()].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+            if (removed.size) merged.removedPaymentIds = [...removed].sort()
+            if (JSON.stringify(merged.payments) !== JSON.stringify(existing.payments) || JSON.stringify(merged.removedPaymentIds) !== JSON.stringify(existing.removedPaymentIds)) {
+              merged.updatedAt = Math.max(Date.now(), stamp(existing) + 1, stamp(row))
+            }
+          }
+          if (JSON.stringify(merged) !== JSON.stringify(existing)) {
+            if (!preferRemote) localReferences.add(merged)
             writes.push(merged)
             byIdentity.set(identity, merged)
             byNatural.set(naturalKey(name, merged), merged)
@@ -178,6 +205,7 @@ export async function mergeSnapshot(dbx: ShowroomDB, remoteJson: string): Promis
         row[field] = map.get(remoteId)
       }
       for (const row of writes) {
+        if (localReferences.has(row)) { await table.put(row); continue }
         if (name === 'invoices' || name === 'payments') mapReference(row, 'partyId', 'parties')
         if (name === 'invoices') {
           mapReference(row, 'fromId', 'invoices')
@@ -202,15 +230,16 @@ export async function mergeSnapshot(dbx: ShowroomDB, remoteJson: string): Promis
         }
       }
     }
+    await reconcileInventory(dbx)
     return stats
   })
 }
 
 /** Company registry (kaun-kaun si companies hain) ka merge */
-async function syncRegistry(uid: string): Promise<number> {
+async function syncRegistry(uid: string, attempt = 0): Promise<number> {
   const local = listCompanies()
-  const remote = (await remoteGetCompanies(uid)) ?? []
-  let changed = false
+  const registry = await remoteGetRegistry(uid)
+  const remote = registry?.companies ?? []
 
   for (const rc of remote) {
     const mine = local.find((c) => c.id === rc.id)
@@ -223,17 +252,20 @@ async function syncRegistry(uid: string): Promise<number> {
       if (created) {
         const fixed: Company[] = list.map((c) => (c.id === created.id ? { ...c, id: rc.id, name: rc.name, createdAt: rc.createdAt } : c))
         store.set('local', 'showroom_companies', JSON.stringify(fixed))
-        changed = true
       }
     } else if (mine.name !== rc.name && rc.createdAt > mine.createdAt) {
       renameCompany(mine.id, rc.name)
-      changed = true
     }
   }
 
   const merged: RemoteCompany[] = listCompanies().map((c) => ({ id: c.id, name: c.name, createdAt: c.createdAt }))
-  await remoteSetCompanies(uid, merged)
-  return changed ? merged.length : merged.length
+  try {
+    await remoteSetCompanies(uid, merged, registry ? registry.updateTime : null)
+  } catch (e) {
+    if (e instanceof CloudError && e.code === 'SYNC_CONFLICT' && attempt < 2) return syncRegistry(uid, attempt + 1)
+    throw e
+  }
+  return merged.length
 }
 
 export interface SyncProgress {
@@ -265,18 +297,25 @@ async function runSync(
     const dbx = dbFor(company.id)
     await dbx.open()
 
-    const remote = await remoteGetCompany(session.uid, company.id)
-
-    if (remote) {
-      const stats = await mergeSnapshot(dbx, remote.payload)
-      total.added += stats.added
-      total.updated += stats.updated
-      total.skipped += stats.skipped
-      pulled = pulled || stats.added + stats.updated > 0
+    // Compare-and-set publication prevents two devices replacing each other's snapshots.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (getSession()?.uid !== session.uid) throw new Error('Cloud account badal gaya; dobara sync karein')
+      const remote = await remoteGetCompany(session.uid, company.id)
+      if (getSession()?.uid !== session.uid) throw new Error('Cloud account badal gaya; dobara sync karein')
+      if (remote) {
+        const stats = await mergeSnapshot(dbx, remote.payload)
+        total.added += stats.added
+        total.updated += stats.updated
+        total.skipped += stats.skipped
+        pulled = pulled || stats.added + stats.updated > 0
+      }
+      try {
+        await remoteSetCompany(session.uid, company.id, await buildSnapshot(dbx), remote ? remote.updateTime : null)
+        break
+      } catch (e) {
+        if (!(e instanceof CloudError) || e.code !== 'SYNC_CONFLICT' || attempt === 2) throw e
+      }
     }
-
-    // ab local (merged) snapshot cloud par chadhа do
-    await remoteSetCompany(session.uid, company.id, await buildSnapshot(dbx))
     store.set('local', lastSyncKey(company.id), String(Date.now()))
   }
 

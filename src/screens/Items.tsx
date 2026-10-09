@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/db'
 import { itemMargin, itemSalePrice, itemTaxablePrice } from '../lib/calc'
-import { download, money, num, readFileAsText, round2 } from '../lib/format'
+import { download, money, num, quantity, readFileAsText, round2 } from '../lib/format'
 import { deleteItem, upsertItem } from '../lib/repo'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { ChipRow, ConfirmDialog, EmptyState, SearchInput, Sheet, StatBox, toast } from '../components/ui'
@@ -81,7 +81,7 @@ export function ItemsScreen({ business, focusLowStock }: { business: Business; f
     for (const it of parsed) {
       const found = existing.find((e) => e.code.toLowerCase() === it.code.toLowerCase())
       if (found?.id) {
-        await upsertItem({ ...it, id: found.id })
+        await upsertItem({ ...it, id: found.id, updatedAt: found.updatedAt })
         updated++
       } else {
         await upsertItem(it as Item)
@@ -179,7 +179,7 @@ export function ItemsScreen({ business, focusLowStock }: { business: Business; f
                           : 'bg-money-soft text-money'
                     }`}
                   >
-                    {num(i.stockQty, 0)}
+                    {quantity(i.stockQty)}
                   </div>
                   <div className="mt-0.5 text-[9px] font-bold uppercase text-slate-400">stock</div>
                 </div>
@@ -312,15 +312,17 @@ function ItemEditor({
       toast('Item ka naam likhein', 'error')
       return
     }
-    await upsertItem({
-      ...draft,
-      name: draft.name.trim(),
-      code: draft.code.trim() || `ITEM-${Date.now().toString(36).slice(-5).toUpperCase()}`,
-      brand: draft.brand.trim() || 'Local',
-      category: draft.category.trim() || 'Other',
-    })
-    toast('Item save ho gaya', 'success')
-    onClose()
+    try {
+      await upsertItem({
+        ...draft,
+        name: draft.name.trim(),
+        code: draft.code.trim() || `ITEM-${Date.now().toString(36).slice(-5).toUpperCase()}`,
+        brand: draft.brand.trim() || 'Local',
+        category: draft.category.trim() || 'Other',
+      })
+      toast('Item save ho gaya', 'success')
+      onClose()
+    } catch (e) { toast(e instanceof Error ? e.message : 'Item save nahi hua', 'error') }
   }
 
   return (
@@ -457,9 +459,9 @@ function ItemEditor({
             <label className="label">Stock qty</label>
             <input
               className="input text-right font-bold"
-              inputMode="numeric"
+              inputMode="decimal"
               value={draft.stockQty}
-              onChange={(e) => setDraft({ ...draft, stockQty: Math.round(Number(e.target.value) || 0) })}
+              onChange={(e) => setDraft({ ...draft, stockQty: Number(e.target.value) || 0 })}
             />
           </div>
           <div className="field">

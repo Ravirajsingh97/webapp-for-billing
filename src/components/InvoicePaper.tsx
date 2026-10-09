@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import type { Business, Invoice } from '../lib/types'
 import { docMeta, stateName } from '../lib/types'
 import { computeTotals, hsnSummary } from '../lib/calc'
-import { amountInWords, fmtDate, money, num, round2 } from '../lib/format'
+import { amountInWords, fmtDate, money, num, quantity, round2 } from '../lib/format'
 import { upiUri } from '../lib/doc'
 
 export const A4_WIDTH = 794
@@ -72,7 +72,7 @@ export function InvoicePaper({
                 : 'PURCHASE BILL'
 
   const qr =
-    due && business.upiId
+    due && meta.isSale && business.upiId
       ? upiUri({
           upiId: business.upiId,
           payeeName: business.name,
@@ -115,7 +115,7 @@ export function InvoicePaper({
                   <div className="font-semibold leading-tight">{l.name}</div>
                   <div className="flex justify-between text-[10px]">
                     <span>
-                      {num(l.qty, 0)} {l.unit} × {num(l.rate)} {l.discountPercent ? `- ${num(l.discountPercent, 0)}%` : ''}
+                      {quantity(l.qty)} {l.unit} × {num(l.rate)} {l.discountPercent ? `- ${num(l.discountPercent, 0)}%` : ''}
                     </span>
                     <span className="font-semibold">{num(t.lines[i]?.total ?? 0)}</span>
                   </div>
@@ -126,7 +126,7 @@ export function InvoicePaper({
         </table>
         <div className="dash" />
         <div className="text-[11px]">
-          <Line l="Qty" r={num(t.totalQty, 0)} />
+          <Line l="Qty" r={quantity(t.totalQty)} />
           <Line l="Taxable" r={num(t.taxableNet)} />
           {!meta.noTax && t.tax > 0 ? (
             t.interState ? (
@@ -294,7 +294,7 @@ export function InvoicePaper({
                   </div>
                 </td>
                 <td style={{ textAlign: 'center' }}>{l.hsn || '—'}</td>
-                <td style={{ textAlign: 'right' }}>{num(l.qty, 0)}</td>
+                <td style={{ textAlign: 'right' }}>{quantity(l.qty)}</td>
                 <td style={{ textAlign: 'center' }}>{l.unit}</td>
                 <td style={{ textAlign: 'right' }}>{num(l.rate)}</td>
                 <td style={{ textAlign: 'right' }}>{l.discountPercent ? num(l.discountPercent, 0) : '—'}</td>
@@ -334,12 +334,12 @@ export function InvoicePaper({
                 </thead>
                 <tbody>
                   {hsn.map((h) => (
-                    <tr key={h.hsn}>
+                    <tr key={`${h.hsn}|${h.rate}`}>
                       <td>{h.hsn}</td>
                       <td style={{ textAlign: 'right' }}>{num(h.taxable)}</td>
                       <td style={{ textAlign: 'center' }}>{num(h.rate, 0)}%</td>
                       <td style={{ textAlign: 'right' }}>{t.interState ? '—' : num(round2(h.tax / 2))}</td>
-                      <td style={{ textAlign: 'right' }}>{t.interState ? '—' : num(round2(h.tax - h.tax / 2))}</td>
+                      <td style={{ textAlign: 'right' }}>{t.interState ? '—' : num(round2(h.tax - round2(h.tax / 2)))}</td>
                       {t.interState ? <td style={{ textAlign: 'right' }}>{num(h.tax)}</td> : null}
                     </tr>
                   ))}
